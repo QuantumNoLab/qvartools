@@ -161,7 +161,7 @@ If you use qvartools in your research, please cite:
 
 ```bibtex
 @software{qvartools,
-  author    = {George Umbrarescu},
+  author    = {George Chang},
   title     = {qvartools: Quantum Variational Toolkit},
   year      = {2026},
   url       = {https://github.com/George930502/qvartools},

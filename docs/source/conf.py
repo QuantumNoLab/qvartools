@@ -9,8 +9,8 @@ sys.path.insert(0, os.path.abspath("../../src"))
 # -- Project information -----------------------------------------------------
 
 project = "qvartools"
-copyright = "2024-2026, George Umbrarescu"
-author = "George Umbrarescu"
+copyright = "2024-2026, George Chang"
+author = "George Chang"
 release = "0.0.0"
 
 # -- General configuration ---------------------------------------------------

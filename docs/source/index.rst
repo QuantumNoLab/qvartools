@@ -36,15 +36,7 @@ Key capabilities:
    :maxdepth: 2
    :caption: API Reference
 
-   api/hamiltonians
-   api/nqs
-   api/flows
-   api/krylov
-   api/diag
-   api/solvers
-   api/samplers
-   api/molecules
-   api/pipeline
+   api/index
 
 .. toctree::
    :maxdepth: 2
@@ -58,8 +50,7 @@ Key capabilities:
    :maxdepth: 2
    :caption: Developer Guide
 
-   developer_guide/extending_solvers
-   developer_guide/extending_samplers
+   developer_guide/index
 
 Indices and tables
 ==================

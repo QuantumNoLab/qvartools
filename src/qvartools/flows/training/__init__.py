@@ -1,4 +1,5 @@
 """training --- Flow training objectives and utilities."""
+
 from __future__ import annotations
 
 from qvartools.flows.training.flow_nqs_training import (

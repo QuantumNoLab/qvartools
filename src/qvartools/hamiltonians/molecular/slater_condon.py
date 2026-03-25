@@ -309,9 +309,7 @@ def numba_get_connections(
     s_configs, s_elements = _numba_single_excitations(
         config, n_orb, J_single, K_single, h1e, h2e, num_sites
     )
-    d_configs, d_elements = _numba_double_excitations(
-        config, n_orb, h2e, num_sites
-    )
+    d_configs, d_elements = _numba_double_excitations(config, n_orb, h2e, num_sites)
 
     n_single = s_configs.shape[0]
     n_double = d_configs.shape[0]

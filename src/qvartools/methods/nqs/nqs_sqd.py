@@ -119,9 +119,7 @@ def run_nqs_sqd(
     n_qubits: int = mol_info["n_qubits"]
     device = torch.device(cfg.device)
 
-    logger.info(
-        "run_nqs_sqd: %d orbitals, %d alpha, %d beta", n_orb, n_alpha, n_beta
-    )
+    logger.info("run_nqs_sqd: %d orbitals, %d alpha, %d beta", n_orb, n_alpha, n_beta)
 
     t_start = time.perf_counter()
 

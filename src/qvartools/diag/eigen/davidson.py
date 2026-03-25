@@ -103,9 +103,7 @@ class DavidsonSolver:
         """
         n = H.shape[0]
         if k > n:
-            raise ValueError(
-                f"k={k} exceeds matrix dimension n={n}"
-            )
+            raise ValueError(f"k={k} exceeds matrix dimension n={n}")
 
         H_sparse = scipy.sparse.csr_matrix(H) if not scipy.sparse.issparse(H) else H
         diag = np.array(H_sparse.diagonal(), dtype=np.float64)

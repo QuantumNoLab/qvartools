@@ -128,9 +128,7 @@ class SKQDSolver(Solver):
             merged_train.update(training_config)
         self.training_config: dict[str, Any] = merged_train
 
-    def solve(
-        self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]) -> SolverResult:
         """Run the SKQD pipeline.
 
         Parameters
@@ -224,9 +222,7 @@ class SKQDSolver(Solver):
             metadata=metadata,
         )
 
-    def _create_flow(
-        self, hamiltonian: Hamiltonian, n_qubits: int
-    ) -> torch.nn.Module:
+    def _create_flow(self, hamiltonian: Hamiltonian, n_qubits: int) -> torch.nn.Module:
         """Instantiate the normalizing flow.
 
         Parameters

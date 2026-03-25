@@ -60,8 +60,7 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         if embed_dim % n_heads != 0:
             raise ValueError(
-                f"embed_dim ({embed_dim}) must be divisible by "
-                f"n_heads ({n_heads})."
+                f"embed_dim ({embed_dim}) must be divisible by n_heads ({n_heads})."
             )
         self.embed_dim: int = embed_dim
         self.n_heads: int = n_heads
@@ -134,15 +133,23 @@ class CausalSelfAttention(nn.Module):
             torch.ones(seq_len, kv_len, device=x.device, dtype=torch.bool),
             diagonal=kv_len - seq_len + 1,
         )
-        attn_weights = attn_weights.masked_fill(causal_mask.unsqueeze(0).unsqueeze(0), float("-inf"))
+        attn_weights = attn_weights.masked_fill(
+            causal_mask.unsqueeze(0).unsqueeze(0), float("-inf")
+        )
 
         attn_weights = F.softmax(attn_weights, dim=-1)
         if self.dropout > 0.0 and self.training:
             attn_weights = F.dropout(attn_weights, p=self.dropout, training=True)
 
         # Weighted sum of values
-        attn_output = torch.matmul(attn_weights, v)  # (batch, n_heads, seq_len, head_dim)
-        attn_output = attn_output.transpose(1, 2).contiguous().view(batch, seq_len, self.embed_dim)
+        attn_output = torch.matmul(
+            attn_weights, v
+        )  # (batch, n_heads, seq_len, head_dim)
+        attn_output = (
+            attn_output.transpose(1, 2)
+            .contiguous()
+            .view(batch, seq_len, self.embed_dim)
+        )
 
         return self.out_proj(attn_output)
 
@@ -186,8 +193,7 @@ class CrossAttention(nn.Module):
         super().__init__()
         if embed_dim % n_heads != 0:
             raise ValueError(
-                f"embed_dim ({embed_dim}) must be divisible by "
-                f"n_heads ({n_heads})."
+                f"embed_dim ({embed_dim}) must be divisible by n_heads ({n_heads})."
             )
         self.embed_dim: int = embed_dim
         self.n_heads: int = n_heads
@@ -198,9 +204,7 @@ class CrossAttention(nn.Module):
         self.kv_proj: nn.Linear = nn.Linear(embed_dim, 2 * embed_dim)
         self.out_proj: nn.Linear = nn.Linear(embed_dim, embed_dim)
 
-    def forward(
-        self, query: torch.Tensor, key_value: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, query: torch.Tensor, key_value: torch.Tensor) -> torch.Tensor:
         """Apply cross-attention from query to key_value.
 
         Parameters
@@ -238,6 +242,8 @@ class CrossAttention(nn.Module):
             attn_weights = F.dropout(attn_weights, p=self.dropout, training=True)
 
         attn_output = torch.matmul(attn_weights, v)
-        attn_output = attn_output.transpose(1, 2).contiguous().view(batch, q_len, self.embed_dim)
+        attn_output = (
+            attn_output.transpose(1, 2).contiguous().view(batch, q_len, self.embed_dim)
+        )
 
         return self.out_proj(attn_output)

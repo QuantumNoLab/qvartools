@@ -223,9 +223,7 @@ class TransformerNFSampler(Sampler):
         device: str = "cpu",
     ) -> None:
         self.hamiltonian = hamiltonian
-        self.config: TransformerSamplerConfig = (
-            config or TransformerSamplerConfig()
-        )
+        self.config: TransformerSamplerConfig = config or TransformerSamplerConfig()
         self.device: str = device
 
         n_sites: int = hamiltonian.num_sites
@@ -240,16 +238,14 @@ class TransformerNFSampler(Sampler):
         n_layers = self.config.n_layers or auto["n_layers"]
 
         # Build autoregressive transformer
-        self.transformer: AutoregressiveTransformer = (
-            AutoregressiveTransformer(
-                n_orbitals=n_orbitals,
-                n_alpha=n_alpha,
-                n_beta=n_beta,
-                embed_dim=embed_dim,
-                n_heads=n_heads,
-                n_layers=n_layers,
-            ).to(device)
-        )
+        self.transformer: AutoregressiveTransformer = AutoregressiveTransformer(
+            n_orbitals=n_orbitals,
+            n_alpha=n_alpha,
+            n_beta=n_beta,
+            embed_dim=embed_dim,
+            n_heads=n_heads,
+            n_layers=n_layers,
+        ).to(device)
 
         # Wrap for trainer compatibility
         self.flow: _TransformerFlowWrapper = _TransformerFlowWrapper(
@@ -261,9 +257,7 @@ class TransformerNFSampler(Sampler):
         nqs_heads = self.config.nqs_n_heads or n_heads
         nqs_layers = self.config.nqs_n_layers or max(n_layers - 1, 2)
 
-        self.nqs: nn.Module = self._build_nqs(
-            n_sites, nqs_embed, nqs_heads, nqs_layers
-        )
+        self.nqs: nn.Module = self._build_nqs(n_sites, nqs_embed, nqs_heads, nqs_layers)
 
         self._trained: bool = False
 
@@ -413,9 +407,7 @@ class TransformerNFSampler(Sampler):
         wall_time = time.perf_counter() - t_start
 
         # Build bitstring counts from raw (non-deduplicated) samples
-        bitstrings = [
-            "".join(str(int(b)) for b in row) for row in configs.cpu().int()
-        ]
+        bitstrings = ["".join(str(int(b)) for b in row) for row in configs.cpu().int()]
         counts: dict[str, int] = dict(Counter(bitstrings))
 
         metadata: dict[str, Any] = {

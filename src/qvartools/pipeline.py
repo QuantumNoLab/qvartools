@@ -124,14 +124,14 @@ class FlowGuidedKrylovPipeline:
             self._n_orbitals: int = n_orbitals
             self._n_alpha: int = n_alpha
             self._n_beta: int = n_beta
-            self._n_valid_configs: int = (
-                math.comb(n_orbitals, n_alpha) * math.comb(n_orbitals, n_beta)
+            self._n_valid_configs: int = math.comb(n_orbitals, n_alpha) * math.comb(
+                n_orbitals, n_beta
             )
         else:
             self._n_orbitals = hamiltonian.num_sites
             self._n_alpha = 0
             self._n_beta = 0
-            self._n_valid_configs = 2 ** hamiltonian.num_sites
+            self._n_valid_configs = 2**hamiltonian.num_sites
 
         # Adapt config to system size
         if auto_adapt:
@@ -407,9 +407,7 @@ class FlowGuidedKrylovPipeline:
             )
 
         basis = self.trainer.accumulated_basis.clone()
-        logger.info(
-            "Stage 2: Extracted %d accumulated configurations.", basis.shape[0]
-        )
+        logger.info("Stage 2: Extracted %d accumulated configurations.", basis.shape[0])
 
         # Verify particle conservation
         if self._is_molecular:
@@ -426,9 +424,7 @@ class FlowGuidedKrylovPipeline:
                 beta_ok = beta_part.sum(dim=1) == self._n_beta
                 valid_mask = alpha_ok & beta_ok
                 basis = basis[valid_mask]
-                logger.info(
-                    "After filtering: %d valid configurations.", basis.shape[0]
-                )
+                logger.info("After filtering: %d valid configurations.", basis.shape[0])
 
         # Apply diversity selection
         if cfg.use_diversity_selection and basis.shape[0] > 0:
@@ -463,9 +459,7 @@ class FlowGuidedKrylovPipeline:
                 and self.trainer._essential_configs is not None
             ):
                 essential = self.trainer._essential_configs
-                combined = torch.cat(
-                    [essential.to(selected.device), selected], dim=0
-                )
+                combined = torch.cat([essential.to(selected.device), selected], dim=0)
                 selected = torch.unique(combined, dim=0)
 
             self.nf_basis = selected.to(cfg.device)
@@ -517,9 +511,7 @@ class FlowGuidedKrylovPipeline:
         else:
             return self._run_skqd(nf_basis, progress)
 
-    def _run_skqd(
-        self, basis: torch.Tensor, progress: bool = True
-    ) -> dict[str, Any]:
+    def _run_skqd(self, basis: torch.Tensor, progress: bool = True) -> dict[str, Any]:
         """Run classical SKQD (exact time evolution).
 
         Parameters
@@ -547,9 +539,7 @@ class FlowGuidedKrylovPipeline:
                     compute_optimal_dt,
                 )
 
-                optimal_dt, spectral_range = compute_optimal_dt(
-                    self.hamiltonian
-                )
+                optimal_dt, spectral_range = compute_optimal_dt(self.hamiltonian)
                 time_step = optimal_dt
                 logger.info(
                     "Auto time step: dt=%.6f (spectral range: %.4f Ha)",
@@ -654,9 +644,7 @@ class FlowGuidedKrylovPipeline:
         self.results["combined_energy"] = quantum_energy
         return results
 
-    def _run_sqd(
-        self, basis: torch.Tensor, progress: bool = True
-    ) -> dict[str, Any]:
+    def _run_sqd(self, basis: torch.Tensor, progress: bool = True) -> dict[str, Any]:
         """Run SQD (sampling-based batch diagonalization).
 
         Parameters
@@ -682,9 +670,7 @@ class FlowGuidedKrylovPipeline:
             )
         except ImportError:
             # Fallback to direct diagonalization
-            logger.warning(
-                "SQD pipeline not available, falling back to direct diag."
-            )
+            logger.warning("SQD pipeline not available, falling back to direct diag.")
             return self._direct_diagonalize(basis)
 
         enable_recovery = cfg.sqd_noise_rate > 0
@@ -769,9 +755,7 @@ class FlowGuidedKrylovPipeline:
             _diagonalise_in_basis,
         )
 
-        energy, eigenvector = _diagonalise_in_basis(
-            self.hamiltonian, basis
-        )
+        energy, eigenvector = _diagonalise_in_basis(self.hamiltonian, basis)
 
         expansion_config = ResidualExpansionConfig(
             max_configs_per_iter=self.config.residual_configs_per_iter,

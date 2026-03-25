@@ -94,7 +94,7 @@ def _build_config_index(basis_states: torch.Tensor) -> dict[int, int]:
     # Treat each config as a number in base (max_val+1)
     max_val = int(basis_states.max().item()) + 1
     multipliers = torch.tensor(
-        [max_val ** i for i in range(n_sites - 1, -1, -1)],
+        [max_val**i for i in range(n_sites - 1, -1, -1)],
         dtype=torch.int64,
         device=basis_states.device,
     )
@@ -241,12 +241,8 @@ class ProjectedHamiltonianBuilder:
         basis_cpu = basis_states.detach().cpu()
 
         # Pre-sort hashes for vectorised searchsorted matching
-        hash_values = torch.tensor(
-            list(config_index.keys()), dtype=torch.int64
-        )
-        hash_indices = torch.tensor(
-            list(config_index.values()), dtype=torch.int64
-        )
+        hash_values = torch.tensor(list(config_index.keys()), dtype=torch.int64)
+        hash_indices = torch.tensor(list(config_index.values()), dtype=torch.int64)
         sorted_order = torch.argsort(hash_values)
         sorted_hash_keys = hash_values[sorted_order]
         sorted_hash_vals = hash_indices[sorted_order]
@@ -263,7 +259,10 @@ class ProjectedHamiltonianBuilder:
                 conn_hashes = self._hamiltonian._config_hash_batch(connected)
             else:
                 conn_hashes = torch.tensor(
-                    [_config_hash(connected[c], max_val) for c in range(connected.shape[0])],
+                    [
+                        _config_hash(connected[c], max_val)
+                        for c in range(connected.shape[0])
+                    ],
                     dtype=torch.int64,
                 )
 

@@ -162,7 +162,5 @@ class NFSampler(Sampler):
         dict
             Mapping from bitstring to count.
         """
-        bitstrings = [
-            "".join(str(int(b)) for b in row) for row in configs.cpu().int()
-        ]
+        bitstrings = ["".join(str(int(b)) for b in row) for row in configs.cpu().int()]
         return dict(Counter(bitstrings))

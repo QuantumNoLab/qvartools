@@ -72,7 +72,7 @@ class Hamiltonian(ABC):
             raise ValueError(f"local_dim must be >= 2, got {local_dim}")
         self.num_sites: int = num_sites
         self.local_dim: int = local_dim
-        self.hilbert_dim: int = local_dim ** num_sites
+        self.hilbert_dim: int = local_dim**num_sites
 
     # ------------------------------------------------------------------
     # Abstract interface
@@ -290,9 +290,7 @@ class Hamiltonian(ABC):
             shape=(self.hilbert_dim, self.hilbert_dim),
         )
 
-    def exact_ground_state(
-        self, device: str = "cpu"
-    ) -> tuple[float, torch.Tensor]:
+    def exact_ground_state(self, device: str = "cpu") -> tuple[float, torch.Tensor]:
         """Compute the exact ground state via full diagonalisation.
 
         Parameters

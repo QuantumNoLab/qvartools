@@ -105,9 +105,7 @@ class IterativeNFSQDSolver(Solver):
             merged.update(training_config)
         self.training_config: dict[str, Any] = merged
 
-    def solve(
-        self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]) -> SolverResult:
         """Run the iterative NF-SQD pipeline.
 
         Parameters
@@ -188,12 +186,8 @@ class IterativeNFSQDSolver(Solver):
             builder = ProjectedHamiltonianBuilder(hamiltonian)
             h_proj = builder.build(accumulated_basis.cpu())
 
-            s_proj = scipy.sparse.eye(
-                accumulated_basis.shape[0], format="csr"
-            )
-            eig_vals, eig_vecs = solve_generalized_eigenvalue(
-                h_proj, s_proj, k=1
-            )
+            s_proj = scipy.sparse.eye(accumulated_basis.shape[0], format="csr")
+            eig_vals, eig_vecs = solve_generalized_eigenvalue(h_proj, s_proj, k=1)
 
             energy = float(eig_vals[0])
             prev_eigvec = eig_vecs[:, 0]

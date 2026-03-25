@@ -60,9 +60,7 @@ _DEFAULT_TRAINING_CONFIG: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 
 
-def _create_flow(
-    hamiltonian: Hamiltonian, n_qubits: int
-) -> torch.nn.Module:
+def _create_flow(hamiltonian: Hamiltonian, n_qubits: int) -> torch.nn.Module:
     """Instantiate the normalizing flow.
 
     Parameters

@@ -1,4 +1,5 @@
 """eigen --- Eigensolvers and projected-Hamiltonian construction."""
+
 from __future__ import annotations
 
 from qvartools.diag.eigen.davidson import DavidsonSolver

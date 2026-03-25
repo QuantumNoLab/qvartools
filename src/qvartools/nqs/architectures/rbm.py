@@ -88,13 +88,9 @@ class RBMQuantumState(NeuralQuantumState):
         self.complex_weights: bool = complex_weights
 
         # Visible bias
-        self.a_real: nn.Parameter = nn.Parameter(
-            torch.randn(num_sites) * 0.01
-        )
+        self.a_real: nn.Parameter = nn.Parameter(torch.randn(num_sites) * 0.01)
         # Hidden bias
-        self.b_real: nn.Parameter = nn.Parameter(
-            torch.randn(num_hidden) * 0.01
-        )
+        self.b_real: nn.Parameter = nn.Parameter(torch.randn(num_hidden) * 0.01)
         # Weight matrix
         self.W_real: nn.Parameter = nn.Parameter(
             torch.randn(num_hidden, num_sites) * (1.0 / math.sqrt(num_sites))
@@ -109,8 +105,7 @@ class RBMQuantumState(NeuralQuantumState):
             self.a_imag = nn.Parameter(torch.randn(num_sites) * 0.01)
             self.b_imag = nn.Parameter(torch.randn(num_hidden) * 0.01)
             self.W_imag = nn.Parameter(
-                torch.randn(num_hidden, num_sites)
-                * (1.0 / math.sqrt(num_sites))
+                torch.randn(num_hidden, num_sites) * (1.0 / math.sqrt(num_sites))
             )
 
     def _theta(self, x: torch.Tensor) -> torch.Tensor:
@@ -208,9 +203,7 @@ class RBMQuantumState(NeuralQuantumState):
             Phases in radians, shape ``(batch,)``.
         """
         if not self.complex_weights:
-            return torch.zeros(
-                x.shape[0], device=x.device, dtype=torch.float32
-            )
+            return torch.zeros(x.shape[0], device=x.device, dtype=torch.float32)
 
         x_enc = self.encode_configuration(x)
         theta = self._theta(x)

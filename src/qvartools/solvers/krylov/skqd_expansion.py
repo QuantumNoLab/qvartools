@@ -100,9 +100,7 @@ def _build_initial_basis(
     return basis, basis_hashes
 
 
-def _diagonalize(
-    hamiltonian: Any, basis: torch.Tensor
-) -> tuple[float, np.ndarray]:
+def _diagonalize(hamiltonian: Any, basis: torch.Tensor) -> tuple[float, np.ndarray]:
     """Diagonalize the projected Hamiltonian. Returns ``(e0, psi0)``."""
     H_proj = hamiltonian.matrix_elements_fast(basis)
     H_np = H_proj.cpu().numpy().astype(np.float64)
@@ -114,9 +112,7 @@ def _diagonalize(
         from scipy.sparse import csr_matrix
         from scipy.sparse.linalg import eigsh
 
-        eigenvalues, eigenvectors = eigsh(
-            csr_matrix(H_np), k=1, which="SA"
-        )
+        eigenvalues, eigenvectors = eigsh(csr_matrix(H_np), k=1, which="SA")
 
     return float(eigenvalues[0]), eigenvectors[:, 0]
 
@@ -156,9 +152,7 @@ class SKQDSolverB(Solver):
         self.sampler = sampler
         self.config = config or SKQDExpansionConfig()
 
-    def solve(
-        self, hamiltonian: Any, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Any, mol_info: dict[str, Any]) -> SolverResult:
         """Run SKQD-B.
 
         Parameters
@@ -220,11 +214,9 @@ class SKQDSolverB(Solver):
                     if h not in basis_hashes:
                         h_elem = float(elements[k])
                         coupling = c_i * h_elem
-                        h_xx = float(
-                            hamiltonian.diagonal_element(connected[k])
-                        )
+                        h_xx = float(hamiltonian.diagonal_element(connected[k]))
                         denom = abs(e0 - h_xx) + 1e-12
-                        importance = coupling ** 2 / denom
+                        importance = coupling**2 / denom
 
                         new_configs.append(connected[k])
                         new_importance.append(importance)
@@ -292,9 +284,7 @@ class SKQDSolverC(Solver):
         self.sampler = sampler
         self.config = config or SKQDExpansionConfig()
 
-    def solve(
-        self, hamiltonian: Any, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Any, mol_info: dict[str, Any]) -> SolverResult:
         """Run SKQD-C.
 
         Parameters
@@ -367,9 +357,7 @@ class SKQDSolverC(Solver):
             top_k = min(cfg.expansion_size, len(external_configs))
             top_indices = np.argsort(scores_arr)[-top_k:]
 
-            new_batch = torch.stack(
-                [external_configs[i] for i in top_indices]
-            )
+            new_batch = torch.stack([external_configs[i] for i in top_indices])
             basis = torch.cat([basis, new_batch], dim=0)
 
         wall_time = time.perf_counter() - t0

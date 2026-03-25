@@ -123,6 +123,5 @@ else:
     def uccsd_ansatz(*args, **kwargs):
         """Stub that raises when ``cudaq`` is not installed."""
         raise ImportError(
-            "cudaq is required for uccsd_ansatz. "
-            "Install with: pip install cuda-quantum"
+            "cudaq is required for uccsd_ansatz. Install with: pip install cuda-quantum"
         )

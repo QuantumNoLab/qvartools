@@ -63,9 +63,7 @@ def compile_nqs(
         logger.info("Successfully compiled NQS model with mode='%s'.", mode)
         return compiled
     except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "torch.compile failed (%s). Returning uncompiled model.", exc
-        )
+        logger.warning("torch.compile failed (%s). Returning uncompiled model.", exc)
         return model
 
 
@@ -231,9 +229,7 @@ class DenseNQS(NeuralQuantumState):
             Phases in radians, shape ``(batch,)``.
         """
         if self.phase_net is None:
-            return torch.zeros(
-                x.shape[0], device=x.device, dtype=torch.float32
-            )
+            return torch.zeros(x.shape[0], device=x.device, dtype=torch.float32)
         x = self.encode_configuration(x)
         raw = self.phase_net(x).squeeze(-1)  # (batch,)
         return raw * torch.pi

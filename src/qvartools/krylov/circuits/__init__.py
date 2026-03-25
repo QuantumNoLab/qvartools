@@ -1,4 +1,5 @@
 """circuits --- Quantum-circuit Krylov methods."""
+
 from __future__ import annotations
 
 from qvartools.krylov.circuits.circuit_skqd import (

@@ -78,9 +78,7 @@ class TrotterSampler(Sampler):
         initial_state: np.ndarray | None = None,
     ) -> None:
         if n_trotter_steps < 1:
-            raise ValueError(
-                f"n_trotter_steps must be >= 1, got {n_trotter_steps}"
-            )
+            raise ValueError(f"n_trotter_steps must be >= 1, got {n_trotter_steps}")
         if time_step <= 0.0:
             raise ValueError(f"time_step must be > 0, got {time_step}")
 
@@ -165,9 +163,7 @@ class TrotterSampler(Sampler):
         probabilities = np.abs(evolved_state) ** 2
         prob_sum = probabilities.sum()
         if prob_sum < 1e-15:
-            raise RuntimeError(
-                "Evolved state has near-zero norm; cannot sample."
-            )
+            raise RuntimeError("Evolved state has near-zero norm; cannot sample.")
         probabilities = probabilities / prob_sum
 
         # Sample indices
@@ -182,9 +178,7 @@ class TrotterSampler(Sampler):
         configs = torch.stack(configs_list)
 
         # Build counts
-        bitstrings = [
-            "".join(str(int(b)) for b in row) for row in configs.int()
-        ]
+        bitstrings = ["".join(str(int(b)) for b in row) for row in configs.int()]
         counts = dict(Counter(bitstrings))
 
         unique_indices = np.unique(indices)
@@ -200,8 +194,7 @@ class TrotterSampler(Sampler):
         }
 
         logger.info(
-            "TrotterSampler: drew %d samples (%d unique) in %.3fs, "
-            "total_time=%.2f",
+            "TrotterSampler: drew %d samples (%d unique) in %.3fs, total_time=%.2f",
             n_samples,
             len(unique_indices),
             sample_time,

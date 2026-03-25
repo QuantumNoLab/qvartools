@@ -87,9 +87,7 @@ class SystemScaler:
     >>> config = scaler.create_pipeline_config(hamiltonian)
     """
 
-    def __init__(
-        self, preset: QualityPreset = QualityPreset.BALANCED
-    ) -> None:
+    def __init__(self, preset: QualityPreset = QualityPreset.BALANCED) -> None:
         self.preset: QualityPreset = preset
         self._mult: dict[str, float] = _PRESET_MULTIPLIERS[preset]
 

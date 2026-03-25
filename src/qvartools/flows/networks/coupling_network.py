@@ -91,9 +91,7 @@ class MultiModalPrior:
             0, 2, (batch_size, self.num_sites), device=self.device
         ).float()
         centres = 2.0 * components - 1.0  # maps {0,1} -> {-1,+1}
-        noise = torch.randn(
-            batch_size, self.num_sites, device=self.device
-        ) * self.std
+        noise = torch.randn(batch_size, self.num_sites, device=self.device) * self.std
         return centres + noise
 
     def log_prob(self, z: torch.Tensor) -> torch.Tensor:
@@ -114,7 +112,7 @@ class MultiModalPrior:
             Log-probabilities, shape ``(batch,)``.
         """
         log_norm = -0.5 * math.log(2.0 * math.pi) - math.log(self.std)
-        var = self.std ** 2
+        var = self.std**2
 
         # Log-prob for each component: shape (batch, num_sites)
         log_p_neg = log_norm - 0.5 * (z + 1.0) ** 2 / var
@@ -175,9 +173,7 @@ class CouplingNetwork(nn.Module):
 
         self.net: nn.Sequential = nn.Sequential(*layers)
 
-    def forward(
-        self, masked_x: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, masked_x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Compute scale and shift from the masked input.
 
         Parameters

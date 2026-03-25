@@ -89,9 +89,7 @@ class TestRBMQuantumState:
         result = rbm_real.log_amplitude(batch)
         assert result.shape == (8,)
 
-    def test_phase_shape(
-        self, rbm_real: RBMQuantumState, batch: torch.Tensor
-    ) -> None:
+    def test_phase_shape(self, rbm_real: RBMQuantumState, batch: torch.Tensor) -> None:
         result = rbm_real.phase(batch)
         assert result.shape == (8,)
 

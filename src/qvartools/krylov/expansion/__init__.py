@@ -1,4 +1,5 @@
 """expansion --- Basis expansion strategies (residual, selected-CI, connections)."""
+
 from __future__ import annotations
 
 from qvartools.krylov.expansion.krylov_expand import expand_basis_via_connections

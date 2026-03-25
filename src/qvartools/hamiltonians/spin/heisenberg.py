@@ -178,7 +178,9 @@ class HeisenbergHamiltonian(Hamiltonian):
         # S^z_i = 0.5 - config[i]  (config 0 → +0.5, config 1 → -0.5)
         sz = 0.5 - configs_f  # (batch, num_sites)
 
-        energy = torch.zeros(configs_f.shape[0], dtype=torch.float64, device=configs.device)
+        energy = torch.zeros(
+            configs_f.shape[0], dtype=torch.float64, device=configs.device
+        )
 
         # ZZ interaction
         for i, j in self._neighbours:
@@ -235,8 +237,8 @@ class HeisenbergHamiltonian(Hamiltonian):
 
         jx = self.Jx
         jy = self.Jy
-        coeff_flip = 0.25 * (jx + jy)        # S^+S^- + S^-S^+ part
-        coeff_double = 0.25 * (jx - jy)      # S^+S^+ + S^-S^- part
+        coeff_flip = 0.25 * (jx + jy)  # S^+S^- + S^-S^+ part
+        coeff_double = 0.25 * (jx - jy)  # S^+S^+ + S^-S^- part
 
         for i, j in self._neighbours:
             ci = int(config[i].item())

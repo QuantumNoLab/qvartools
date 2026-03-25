@@ -47,7 +47,7 @@ try:
 
     _TILE = 32
 
-    _CUDA_CODE = r'''
+    _CUDA_CODE = r"""
 #define TILE 32
 extern "C" {
 __global__
@@ -149,11 +149,11 @@ void _gather(double *out, double *t1,
     }
     out[stra*nb+strb] += val;
 }
-}'''
+}"""
 
     _cuda_module = cp.RawModule(code=_CUDA_CODE)
-    _kernel_build_t1 = _cuda_module.get_function('_build_t1')
-    _kernel_gather = _cuda_module.get_function('_gather')
+    _kernel_build_t1 = _cuda_module.get_function("_build_t1")
+    _kernel_gather = _cuda_module.get_function("_gather")
 
     def _link_index_to_addrs(link_index, nnorb):
         """Convert PySCF link_index to GPU address/sign arrays."""
@@ -206,6 +206,7 @@ void _gather(double *out, double *t1,
 
     class GPUFCISolver(_cpu_direct_spin1.FCI):
         """FCI solver with GPU-accelerated contract_2e."""
+
         contract_2e = staticmethod(_gpu_contract_2e)
 
     GPU_FCI_AVAILABLE = True
@@ -234,6 +235,7 @@ except Exception as e:
                 "Requires: cupy + pyscf"
             )
 
+
 # Keep backward-compatible alias
 GPU4PYSCF_AVAILABLE = GPU_FCI_AVAILABLE
 
@@ -241,6 +243,7 @@ GPU4PYSCF_AVAILABLE = GPU_FCI_AVAILABLE
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def compute_gpu_fci(
     geometry: list,
@@ -274,8 +277,7 @@ def compute_gpu_fci(
     """
     if not GPU_FCI_AVAILABLE:
         raise RuntimeError(
-            f"GPU FCI not available: {_GPU_FCI_IMPORT_ERROR}. "
-            "Requires: cupy + pyscf"
+            f"GPU FCI not available: {_GPU_FCI_IMPORT_ERROR}. Requires: cupy + pyscf"
         )
 
     from pyscf import ao2mo, gto, scf
@@ -343,8 +345,7 @@ def compute_gpu_fci_from_integrals(
     """
     if not GPU_FCI_AVAILABLE:
         raise RuntimeError(
-            f"GPU FCI not available: {_GPU_FCI_IMPORT_ERROR}. "
-            "Requires: cupy + pyscf"
+            f"GPU FCI not available: {_GPU_FCI_IMPORT_ERROR}. Requires: cupy + pyscf"
         )
 
     from pyscf import ao2mo

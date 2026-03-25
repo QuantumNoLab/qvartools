@@ -90,9 +90,7 @@ class CIPSISolver(Solver):
     # Public API
     # ------------------------------------------------------------------
 
-    def solve(
-        self, hamiltonian: Any, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Any, mol_info: dict[str, Any]) -> SolverResult:
         """Run the CIPSI selected-CI algorithm.
 
         Parameters
@@ -140,9 +138,7 @@ class CIPSISolver(Solver):
             coeffs = eigvecs[:, 0]
 
             iteration_energies.append(e0)
-            logger.debug(
-                "CIPSI iter %d: basis=%d  E=%.10f Ha", it, n_basis, e0
-            )
+            logger.debug("CIPSI iter %d: basis=%d  E=%.10f Ha", it, n_basis, e0)
 
             # Convergence check
             if prev_energy is not None:
@@ -175,9 +171,7 @@ class CIPSISolver(Solver):
                 if abs(c_i) < 1e-14:
                     continue
 
-                connections, h_elements = hamiltonian.get_connections(
-                    basis[idx]
-                )
+                connections, h_elements = hamiltonian.get_connections(basis[idx])
                 if connections is None or len(connections) == 0:
                     continue
 
@@ -195,9 +189,7 @@ class CIPSISolver(Solver):
 
             # (d) Compute PT2 importance
             cand_hash_list = list(candidate_configs.keys())
-            cand_tensor = torch.stack(
-                [candidate_configs[h] for h in cand_hash_list]
-            )
+            cand_tensor = torch.stack([candidate_configs[h] for h in cand_hash_list])
 
             h_diag = np.asarray(
                 hamiltonian.diagonal_elements_batch(cand_tensor),
@@ -225,9 +217,7 @@ class CIPSISolver(Solver):
             basis_hashes.update(new_hashes)
 
             if tqdm is not None and hasattr(iterator, "set_postfix"):
-                iterator.set_postfix(
-                    E=f"{e0:.8f}", basis=basis.shape[0], ordered=False
-                )
+                iterator.set_postfix(E=f"{e0:.8f}", basis=basis.shape[0], ordered=False)
 
         # 3. Final result
         wall_time = time.perf_counter() - t0

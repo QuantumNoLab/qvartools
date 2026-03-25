@@ -1,4 +1,5 @@
 """gpu --- GPU-accelerated linear algebra and diagonalisation."""
+
 from __future__ import annotations
 
 from qvartools._utils.gpu.diagnostics import compute_occupancies

@@ -95,9 +95,7 @@ class FlowGuidedSKQD:
             hamiltonian, config, initial_state
         )
 
-    def _build_matrices(
-        self, configs: torch.Tensor
-    ) -> tuple:
+    def _build_matrices(self, configs: torch.Tensor) -> tuple:
         """Build projected Hamiltonian and overlap matrices.
 
         Delegates to ``self._skqd.extract_projected_submatrix`` (fast

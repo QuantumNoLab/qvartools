@@ -221,7 +221,9 @@ def run_hi_nqs_sqd(
 
     logger.info(
         "run_hi_nqs_sqd: %d orbitals, %d alpha, %d beta",
-        n_orb, n_alpha, n_beta,
+        n_orb,
+        n_alpha,
+        n_beta,
     )
 
     t_start = time.perf_counter()
@@ -301,9 +303,7 @@ def run_hi_nqs_sqd(
                     recovered, (n_alpha, n_beta), mol_info
                 )
             else:
-                e_b, coeffs_b, occs_b = gpu_solve_fermion(
-                    batch_configs, hamiltonian
-                )
+                e_b, coeffs_b, occs_b = gpu_solve_fermion(batch_configs, hamiltonian)
 
             e_b = float(e_b)
             batch_energies.append(e_b)

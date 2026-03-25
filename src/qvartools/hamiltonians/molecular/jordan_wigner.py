@@ -39,8 +39,10 @@ except ImportError:  # pragma: no cover
     # error even when numba is absent.
     def njit(*args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
         """No-op replacement for ``numba.njit`` when Numba is not installed."""
+
         def decorator(fn: Any) -> Any:
             return fn
+
         if args and callable(args[0]):
             return args[0]
         return decorator
@@ -52,9 +54,7 @@ except ImportError:  # pragma: no cover
 
 
 @njit(cache=True)
-def numba_jw_sign_single(
-    config: np.ndarray, p: int, q: int
-) -> int:
+def numba_jw_sign_single(config: np.ndarray, p: int, q: int) -> int:
     """Compute the Jordan--Wigner sign for a single excitation a†_p a_q.
 
     The sign is ``(-1)^(number of occupied orbitals strictly between p and q)``.
@@ -98,9 +98,7 @@ def numba_jw_sign_single(
 
 
 @njit(cache=True)
-def numba_jw_sign_double(
-    config: np.ndarray, p: int, r: int, q: int, s: int
-) -> int:
+def numba_jw_sign_double(config: np.ndarray, p: int, r: int, q: int, s: int) -> int:
     """Compute the Jordan--Wigner sign for a double excitation a†_p a†_r a_s a_q.
 
     The operator ordering is right-to-left: first annihilate q, then s,

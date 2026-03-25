@@ -15,9 +15,7 @@ try:
 except ImportError:
     _HAS_PYSCF = False
 
-pyscf_required = pytest.mark.skipif(
-    not _HAS_PYSCF, reason="PySCF is not installed"
-)
+pyscf_required = pytest.mark.skipif(not _HAS_PYSCF, reason="PySCF is not installed")
 
 
 # ---------------------------------------------------------------------------

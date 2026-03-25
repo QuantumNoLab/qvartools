@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 # Basis enumeration
 # ---------------------------------------------------------------------------
 
+
 def _enumerate_basis(hamiltonian: MolecularHamiltonian) -> torch.Tensor:
     """Enumerate all particle-conserving configurations."""
     n_orb = hamiltonian.n_orbitals
@@ -63,6 +64,7 @@ def _enumerate_basis(hamiltonian: MolecularHamiltonian) -> torch.Tensor:
 # ---------------------------------------------------------------------------
 # Strategy implementations
 # ---------------------------------------------------------------------------
+
 
 def _spectral_range_dense(
     hamiltonian: MolecularHamiltonian,
@@ -150,7 +152,9 @@ def _spectral_range_sparse_batched(
         i_end = min(i_start + batch_size, n)
         batch = basis_tensor[i_start:i_end]
 
-        connected, elements, batch_indices = hamiltonian.get_connections_vectorized_batch(batch)
+        connected, elements, batch_indices = (
+            hamiltonian.get_connections_vectorized_batch(batch)
+        )
         if len(connected) == 0:
             continue
 
@@ -193,7 +197,7 @@ def _spectral_range_sparse_batched(
     logger.info(
         "Sparse matrix: %s nonzeros (%d MB)",
         f"{h_sp.nnz:,}",
-        h_sp.nnz * 8 // (1024 ** 2),
+        h_sp.nnz * 8 // (1024**2),
     )
 
     try:
@@ -241,6 +245,7 @@ def _spectral_range_diagonal(
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def compute_optimal_dt(hamiltonian: MolecularHamiltonian) -> tuple[float, float]:
     """

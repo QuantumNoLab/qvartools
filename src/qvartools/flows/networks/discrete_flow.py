@@ -149,9 +149,7 @@ class DiscreteFlowSampler(nn.Module):
         """
         return getattr(self, f"mask_{layer_idx}")
 
-    def _forward_flow(
-        self, z: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def _forward_flow(self, z: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Run the forward (generative) direction of the flow.
 
         Parameters
@@ -192,9 +190,7 @@ class DiscreteFlowSampler(nn.Module):
 
         return y, log_det
 
-    def _inverse_flow(
-        self, y: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def _inverse_flow(self, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Run the inverse (inference) direction of the flow.
 
         Parameters
@@ -272,9 +268,7 @@ class DiscreteFlowSampler(nn.Module):
         """
         return (y >= 0.0).float()
 
-    def sample(
-        self, batch_size: int
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample(self, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
         """Sample discrete binary configurations.
 
         Draws continuous samples from the flow, discretises them, and
@@ -352,8 +346,8 @@ class DiscreteFlowSampler(nn.Module):
         noise = torch.rand(batch, n_mc, self.num_sites, device=device)
         y_mc = torch.where(
             x_expanded == 1.0,
-            noise,                  # [0, 1] for site == 1
-            noise - 1.0,            # [-1, 0) for site == 0
+            noise,  # [0, 1] for site == 1
+            noise - 1.0,  # [-1, 0) for site == 0
         )
 
         # Flatten for log_prob_continuous: (batch * n_mc, num_sites)

@@ -154,9 +154,7 @@ class NFSKQDSolver(Solver):
     # Public API
     # ------------------------------------------------------------------
 
-    def solve(
-        self, hamiltonian: Any, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Any, mol_info: dict[str, Any]) -> SolverResult:
         """Run NF-SKQD and return the ground-state energy estimate.
 
         Parameters
@@ -200,9 +198,8 @@ class NFSKQDSolver(Solver):
 
             # Temperature annealing
             progress = k / max(cfg.n_krylov_powers - 1, 1)
-            temperature = (
-                cfg.initial_temperature
-                + progress * (cfg.final_temperature - cfg.initial_temperature)
+            temperature = cfg.initial_temperature + progress * (
+                cfg.final_temperature - cfg.initial_temperature
             )
 
             # Step 1: Sample from current NF
@@ -238,9 +235,7 @@ class NFSKQDSolver(Solver):
 
                 if truly_new:
                     new_batch = torch.stack(truly_new)
-                    cumulative_basis = torch.cat(
-                        [cumulative_basis, new_batch], dim=0
-                    )
+                    cumulative_basis = torch.cat([cumulative_basis, new_batch], dim=0)
                     n_new = len(truly_new)
 
             samples_per_power.append(n_new)
@@ -268,9 +263,7 @@ class NFSKQDSolver(Solver):
                     from scipy.sparse import csr_matrix
                     from scipy.sparse.linalg import eigsh
 
-                    eigenvalues, eigenvectors = eigsh(
-                        csr_matrix(H_np), k=1, which="SA"
-                    )
+                    eigenvalues, eigenvectors = eigsh(csr_matrix(H_np), k=1, which="SA")
 
                 e0 = float(eigenvalues[0])
                 psi0 = eigenvectors[:, 0]
@@ -345,7 +338,7 @@ def _evolve_nf(
     """
     basis_float = basis_configs.float()
 
-    weights = torch.from_numpy(psi0 ** 2).float()
+    weights = torch.from_numpy(psi0**2).float()
     weights = weights / weights.sum()
 
     with torch.no_grad():

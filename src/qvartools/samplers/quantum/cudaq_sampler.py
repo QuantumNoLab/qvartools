@@ -107,9 +107,7 @@ class CUDAQCircuitSampler(Sampler):
 
         cudaq.set_target(self.config.target)
 
-        self.n_params: int = count_uccsd_params(
-            self.n_orbitals, self.config.n_layers
-        )
+        self.n_params: int = count_uccsd_params(self.n_orbitals, self.config.n_layers)
         self._params: np.ndarray = np.random.randn(self.n_params) * 0.01
 
     # ------------------------------------------------------------------
@@ -171,9 +169,7 @@ class CUDAQCircuitSampler(Sampler):
         configs_list: list[torch.Tensor] = []
         for bitstring in result:
             count = result.count(bitstring)
-            config = torch.tensor(
-                [int(b) for b in bitstring], dtype=torch.long
-            )
+            config = torch.tensor([int(b) for b in bitstring], dtype=torch.long)
             configs_list.extend([config] * count)
 
         wall_time = time.perf_counter() - t_start
@@ -191,9 +187,7 @@ class CUDAQCircuitSampler(Sampler):
         unique_configs = torch.unique(configs, dim=0)
 
         # Build bitstring counts
-        bitstrings = [
-            "".join(str(int(b)) for b in row) for row in configs.int()
-        ]
+        bitstrings = ["".join(str(int(b)) for b in row) for row in configs.int()]
         counts: dict[str, int] = dict(Counter(bitstrings))
 
         metadata: dict[str, Any] = {

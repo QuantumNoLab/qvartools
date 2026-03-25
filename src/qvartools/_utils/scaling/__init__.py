@@ -1,4 +1,5 @@
 """scaling --- Quality presets and system-size auto-scaling."""
+
 from __future__ import annotations
 
 from qvartools._utils.scaling.quality_presets import (

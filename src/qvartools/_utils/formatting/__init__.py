@@ -1,4 +1,5 @@
 """formatting --- Bitstring format conversion utilities."""
+
 from __future__ import annotations
 
 from qvartools._utils.formatting.bitstring_format import (

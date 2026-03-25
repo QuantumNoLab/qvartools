@@ -125,7 +125,12 @@ class TestSKQD:
         skqd = SampleBasedKrylovDiagonalization(heisenberg_4, config)
         _, info = skqd.run()
 
-        expected_keys = {"basis_size", "krylov_dim", "energies_per_step", "basis_configs"}
+        expected_keys = {
+            "basis_size",
+            "krylov_dim",
+            "energies_per_step",
+            "basis_configs",
+        }
         assert expected_keys == set(info.keys())
         assert info["krylov_dim"] == 3
         assert len(info["energies_per_step"]) == 3
@@ -152,8 +157,13 @@ class TestFlowGuidedSKQD:
         results = skqd.run_with_nf()
 
         expected_keys = {
-            "energy", "eigenvalues", "basis_size", "krylov_dim",
-            "energies_per_step", "nf_energy", "basis_configs",
+            "energy",
+            "eigenvalues",
+            "basis_size",
+            "krylov_dim",
+            "energies_per_step",
+            "nf_energy",
+            "basis_configs",
         }
         assert expected_keys == set(results.keys())
         assert np.isfinite(results["energy"])

@@ -73,9 +73,7 @@ class ResidualBasedExpander:
         self.hamiltonian = hamiltonian
         self.config = config
 
-    def _diagonalize(
-        self, basis: torch.Tensor
-    ) -> tuple[float, np.ndarray]:
+    def _diagonalize(self, basis: torch.Tensor) -> tuple[float, np.ndarray]:
         """Solve the eigenvalue problem in the current basis.
 
         Parameters

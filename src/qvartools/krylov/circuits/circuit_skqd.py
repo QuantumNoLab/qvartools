@@ -20,6 +20,7 @@ Reference:
     NVIDIA CUDA-Q SKQD tutorial:
     nvidia.github.io/cuda-quantum/latest/applications/python/skqd.html
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -31,6 +32,7 @@ import torch
 # Check CUDA-Q availability
 try:
     import cudaq
+
     CUDAQ_AVAILABLE = True
 except ImportError:
     cudaq = None  # type: ignore[assignment]
@@ -39,6 +41,7 @@ except ImportError:
 # Check CuPy availability (for fused CUDA kernel)
 try:
     import cupy as cp
+
     CUPY_AVAILABLE = True
 except ImportError:
     cp = None  # type: ignore[assignment]
@@ -322,7 +325,9 @@ def _get_pauli_matrices(device: torch.device) -> dict[str, torch.Tensor]:
         _PAULI_CACHE[device] = {
             "I": torch.eye(2, dtype=torch.complex128, device=device),
             "X": torch.tensor([[0, 1], [1, 0]], dtype=torch.complex128, device=device),
-            "Y": torch.tensor([[0, -1j], [1j, 0]], dtype=torch.complex128, device=device),
+            "Y": torch.tensor(
+                [[0, -1j], [1j, 0]], dtype=torch.complex128, device=device
+            ),
             "Z": torch.tensor([[1, 0], [0, -1]], dtype=torch.complex128, device=device),
         }
     return _PAULI_CACHE[device]
@@ -336,7 +341,9 @@ class QuantumSKQDConfig:
     max_krylov_dim: int = 15  # Paper: d=15 (Ising simulation, Fig. 1)
     total_evolution_time: float = np.pi
     num_trotter_steps: int = 1  # Paper: single S2(dt) per evolution ([S2(dt)]^k)
-    trotter_order: int = 2  # 1=first-order, 2=second-order Suzuki-Trotter (paper default)
+    trotter_order: int = (
+        2  # 1=first-order, 2=second-order Suzuki-Trotter (paper default)
+    )
 
     # Sampling
     shots: int = 100_000
@@ -451,7 +458,7 @@ class QuantumCircuitSKQD:
         device = self._device
         n_qubits = self.n_qubits
         n_terms = len(self.pauli_words)
-        dim = 2 ** n_qubits
+        dim = 2**n_qubits
 
         # Precompute all basis state bit arrays: (dim, n_qubits) boolean
         indices = torch.arange(dim, device=device, dtype=torch.int64)
@@ -528,8 +535,12 @@ class QuantumCircuitSKQD:
         phases = self._pauli_phase_tables[term_idx]  # (dim,)
 
         # XOR with flip_mask to get target indices (cached arange)
-        if not hasattr(self, "_arange_cache") or self._arange_cache.shape[0] != len(psi):
-            self._arange_cache = torch.arange(len(psi), device=psi.device, dtype=torch.int64)
+        if not hasattr(self, "_arange_cache") or self._arange_cache.shape[0] != len(
+            psi
+        ):
+            self._arange_cache = torch.arange(
+                len(psi), device=psi.device, dtype=torch.int64
+            )
         target_indices = self._arange_cache ^ flip_mask
 
         p_psi = phases[target_indices] * psi[target_indices]
@@ -542,7 +553,7 @@ class QuantumCircuitSKQD:
             return self._H_pauli_gpu
 
         device = self._device
-        dim = 2 ** self.n_qubits
+        dim = 2**self.n_qubits
 
         # Use precomputed Pauli actions for O(n_terms * dim) construction
         self._precompute_pauli_actions()
@@ -557,7 +568,10 @@ class QuantumCircuitSKQD:
 
             H[indices, target_indices] += coeff * phases[target_indices]
 
-        H.add_(torch.eye(dim, dtype=torch.complex128, device=device), alpha=self.constant_energy)
+        H.add_(
+            torch.eye(dim, dtype=torch.complex128, device=device),
+            alpha=self.constant_energy,
+        )
 
         self._H_pauli_gpu = H
         return H
@@ -577,7 +591,7 @@ class QuantumCircuitSKQD:
             return self._trotter_U_gpu
 
         device = self._device
-        dim = 2 ** self.n_qubits
+        dim = 2**self.n_qubits
 
         self._precompute_pauli_actions()
 
@@ -609,7 +623,7 @@ class QuantumCircuitSKQD:
             return self._psi0_gpu.clone()
 
         device = self._device
-        dim = 2 ** self.n_qubits
+        dim = 2**self.n_qubits
         psi = torch.zeros(dim, dtype=torch.complex128, device=device)
 
         if self.initial_state_vector is not None:
@@ -671,7 +685,9 @@ class QuantumCircuitSKQD:
 
         # Determine occupied qubits for HF state (reused across all Krylov steps)
         if self.config.initial_state == "hf":
-            if self.hamiltonian is not None and hasattr(self.hamiltonian, "get_hf_state"):
+            if self.hamiltonian is not None and hasattr(
+                self.hamiltonian, "get_hf_state"
+            ):
                 hf = self.hamiltonian.get_hf_state().cpu().numpy()
                 self._occupied_qubits = [i for i in range(self.n_qubits) if hf[i] == 1]
             else:
@@ -742,7 +758,7 @@ class QuantumCircuitSKQD:
         if not hasattr(self, "_cudaq_info_printed"):
             self._cudaq_info_printed = True
             n_terms = len(self.pauli_coefficients)
-            dim = 2 ** self.n_qubits
+            dim = 2**self.n_qubits
             print(
                 f"  CUDA-Q from-scratch mode ({n_terms} Pauli terms, "
                 f"dim={dim:,}, O(k^2) total Trotter steps)"
@@ -807,7 +823,7 @@ class QuantumCircuitSKQD:
         Phase 3: Auto-selects dense unitary for small systems (<=13 qubits)
                  or lightweight per-term Trotter for large systems (no phase_table).
         """
-        dim = 2 ** self.n_qubits
+        dim = 2**self.n_qubits
         use_dense = dim <= TROTTER_UNITARY_DIM_LIMIT
 
         if use_dense:
@@ -841,7 +857,11 @@ class QuantumCircuitSKQD:
         else:
             # Fallback: evolve from scratch
             psi = self._get_initial_state_gpu()
-            step_fn = self._apply_trotter_step if use_dense else self._apply_trotter_step_lightweight
+            step_fn = (
+                self._apply_trotter_step
+                if use_dense
+                else self._apply_trotter_step_lightweight
+            )
             for _ in range(krylov_power):
                 psi = step_fn(psi)
 
@@ -889,8 +909,12 @@ class QuantumCircuitSKQD:
         yz_mask = self._lw_yz_masks[term_idx].item()
         i_ny = self._lw_i_ny[term_idx]
 
-        if not hasattr(self, "_arange_cache") or self._arange_cache.shape[0] != len(psi):
-            self._arange_cache = torch.arange(len(psi), device=psi.device, dtype=torch.int64)
+        if not hasattr(self, "_arange_cache") or self._arange_cache.shape[0] != len(
+            psi
+        ):
+            self._arange_cache = torch.arange(
+                len(psi), device=psi.device, dtype=torch.int64
+            )
 
         target_indices = self._arange_cache ^ flip_mask
         psi_flipped = psi[target_indices]
@@ -923,13 +947,19 @@ class QuantumCircuitSKQD:
         if self.config.trotter_order == 2:
             for _ in range(self.config.num_trotter_steps):
                 for k in range(n_terms):
-                    psi = self._apply_pauli_exp_lightweight(psi, k, cos_vals[k], sin_vals[k])
+                    psi = self._apply_pauli_exp_lightweight(
+                        psi, k, cos_vals[k], sin_vals[k]
+                    )
                 for k in range(n_terms - 1, -1, -1):
-                    psi = self._apply_pauli_exp_lightweight(psi, k, cos_vals[k], sin_vals[k])
+                    psi = self._apply_pauli_exp_lightweight(
+                        psi, k, cos_vals[k], sin_vals[k]
+                    )
         else:
             for _ in range(self.config.num_trotter_steps):
                 for k in range(n_terms):
-                    psi = self._apply_pauli_exp_lightweight(psi, k, cos_vals[k], sin_vals[k])
+                    psi = self._apply_pauli_exp_lightweight(
+                        psi, k, cos_vals[k], sin_vals[k]
+                    )
         return psi
 
     def _apply_trotter_step_cupy(self, psi: torch.Tensor, kernel: Any) -> torch.Tensor:
@@ -959,12 +989,14 @@ class QuantumCircuitSKQD:
             self._cupy_diag_indices = [
                 k
                 for k in range(n_terms)
-                if self._cupy_flip_masks_cpu[k] == 0 and abs(self._cupy_sin_cpu[k]) >= 1e-15
+                if self._cupy_flip_masks_cpu[k] == 0
+                and abs(self._cupy_sin_cpu[k]) >= 1e-15
             ]
             self._cupy_offdiag_indices = [
                 k
                 for k in range(n_terms)
-                if self._cupy_flip_masks_cpu[k] != 0 and abs(self._cupy_sin_cpu[k]) >= 1e-15
+                if self._cupy_flip_masks_cpu[k] != 0
+                and abs(self._cupy_sin_cpu[k]) >= 1e-15
             ]
 
             # Pre-allocate CuPy arrays for fused diagonal kernel
@@ -1196,7 +1228,9 @@ class QuantumCircuitSKQD:
 
         return result
 
-    def _apply_hamiltonian_matvec_cupy(self, psi: torch.Tensor, kernel: Any) -> torch.Tensor:
+    def _apply_hamiltonian_matvec_cupy(
+        self, psi: torch.Tensor, kernel: Any
+    ) -> torch.Tensor:
         """
         Fused CuPy CUDA kernel for H|psi>. Single kernel launch, hardware __popc.
         """
@@ -1386,7 +1420,7 @@ class QuantumCircuitSKQD:
 
     def _should_use_lowmem_lanczos(self, krylov_dim: int = 30) -> bool:
         """Auto-select low-memory Lanczos when V matrix would use >40% of VRAM."""
-        dim = 2 ** self.n_qubits
+        dim = 2**self.n_qubits
         v_matrix_bytes = krylov_dim * dim * 16  # complex128
 
         if torch.cuda.is_available():
@@ -1419,7 +1453,9 @@ class QuantumCircuitSKQD:
 
         T = self.config.total_evolution_time
         evolve_fn = (
-            self._lanczos_exact_evolution_lowmem if use_lowmem else self._lanczos_exact_evolution
+            self._lanczos_exact_evolution_lowmem
+            if use_lowmem
+            else self._lanczos_exact_evolution
         )
 
         # Phase 1: Use cached evolved state from previous Krylov step
@@ -1444,7 +1480,9 @@ class QuantumCircuitSKQD:
 
         return self._sample_from_state(psi, krylov_power)
 
-    def _sample_from_state(self, psi: torch.Tensor, krylov_power: int) -> dict[str, int]:
+    def _sample_from_state(
+        self, psi: torch.Tensor, krylov_power: int
+    ) -> dict[str, int]:
         """Shared sampling logic: |psi|^2 -> multinomial -> bitstring counts."""
         probs = torch.abs(psi) ** 2
         probs = probs / probs.sum()
@@ -1492,7 +1530,9 @@ class QuantumCircuitSKQD:
         requested = cfg.backend
         if requested == "cudaq":
             if not CUDAQ_AVAILABLE:
-                raise RuntimeError("backend='cudaq' requested but cudaq is not installed")
+                raise RuntimeError(
+                    "backend='cudaq' requested but cudaq is not installed"
+                )
             sample_fn = self._sample_cudaq
             backend = "CUDA-Q"
         elif requested == "classical":
@@ -1643,9 +1683,9 @@ class QuantumCircuitSKQD:
         n = len(bitstrings)
         nq = self.n_qubits
 
-        flat = np.frombuffer(
-            "".join(bitstrings).encode("ascii"), dtype=np.uint8
-        ) - ord("0")
+        flat = np.frombuffer("".join(bitstrings).encode("ascii"), dtype=np.uint8) - ord(
+            "0"
+        )
         basis = torch.from_numpy(flat.reshape(n, nq).astype(np.int64)).to(self._device)
         return basis
 
@@ -1673,7 +1713,7 @@ class QuantumCircuitSKQD:
             subspace_dim = len(cum_samples)
 
             if progress:
-                print(f"  k={k+1}: {subspace_dim} basis states, ", end="")
+                print(f"  k={k + 1}: {subspace_dim} basis states, ", end="")
 
             # Build projected Hamiltonian
             if self.hamiltonian is not None:
@@ -1690,7 +1730,11 @@ class QuantumCircuitSKQD:
 
     def _diagonalize_slater_condon(self, basis: torch.Tensor) -> float:
         """Diagonalize using Hamiltonian's matrix_elements (Slater-Condon rules)."""
-        device = self.hamiltonian.device if hasattr(self.hamiltonian, "device") else self._device
+        device = (
+            self.hamiltonian.device
+            if hasattr(self.hamiltonian, "device")
+            else self._device
+        )
         basis = basis.to(device)
 
         H_proj = self.hamiltonian.matrix_elements(basis, basis)
@@ -1762,7 +1806,9 @@ class QuantumCircuitSKQD:
         h_elements = coefficients[None, :] * phase_factors
 
         # Step 4: Convert states to integers for searchsorted matching
-        powers = 1 << torch.arange(n_qubits - 1, -1, -1, device=device, dtype=torch.int64)
+        powers = 1 << torch.arange(
+            n_qubits - 1, -1, -1, device=device, dtype=torch.int64
+        )
         basis_ints = (basis.to(torch.int64) * powers).sum(dim=1)
         transformed_ints = (transformed.to(torch.int64) * powers).sum(dim=2)
 
@@ -1774,8 +1820,12 @@ class QuantumCircuitSKQD:
         search_pos = torch.searchsorted(sorted_basis_ints, transformed_flat)
 
         in_bounds = search_pos < n
-        search_pos_clipped = torch.minimum(search_pos, torch.tensor(n - 1, device=device))
-        actually_found = in_bounds & (sorted_basis_ints[search_pos_clipped] == transformed_flat)
+        search_pos_clipped = torch.minimum(
+            search_pos, torch.tensor(n - 1, device=device)
+        )
+        actually_found = in_bounds & (
+            sorted_basis_ints[search_pos_clipped] == transformed_flat
+        )
 
         # Map back to original indices
         row_indices = sorted_indices[search_pos_clipped]
@@ -1789,7 +1839,10 @@ class QuantumCircuitSKQD:
         H_eff = torch.zeros((n, n), dtype=torch.complex128, device=device)
         H_eff.index_put_((valid_rows, valid_cols), valid_elements, accumulate=True)
 
-        H_eff.add_(torch.eye(n, dtype=torch.complex128, device=device), alpha=self.constant_energy)
+        H_eff.add_(
+            torch.eye(n, dtype=torch.complex128, device=device),
+            alpha=self.constant_energy,
+        )
 
         # Symmetrize
         H_eff = 0.5 * (H_eff + H_eff.conj().T)
@@ -1880,7 +1933,9 @@ class QuantumCircuitSKQD:
         h2e = hamiltonian.h2e.cpu().numpy()
         n_orb = hamiltonian.n_orbitals
 
-        print(f"Jordan-Wigner transformation: {n_orb} orbitals -> {2 * n_orb} qubits...")
+        print(
+            f"Jordan-Wigner transformation: {n_orb} orbitals -> {2 * n_orb} qubits..."
+        )
         coefficients, pauli_words, constant = molecular_hamiltonian_to_pauli(
             h1e, h2e, hamiltonian.nuclear_repulsion, n_orb
         )

@@ -1,4 +1,5 @@
 """krylov --- Krylov-expanded subspace solvers."""
+
 from __future__ import annotations
 
 from qvartools.solvers.krylov.dci_skqd import DCISKQDSolverB, DCISKQDSolverC

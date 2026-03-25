@@ -105,9 +105,7 @@ class Solver(ABC):
     """
 
     @abstractmethod
-    def solve(
-        self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]) -> SolverResult:
         """Compute the ground-state energy.
 
         Parameters

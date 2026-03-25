@@ -120,9 +120,7 @@ def expand_basis_via_connections(
     refs = _select_reference_configs(basis, hamiltonian, n_ref)
 
     # First hop
-    new_map, new_configs_map = _collect_connections(
-        refs, hamiltonian, existing_keys
-    )
+    new_map, new_configs_map = _collect_connections(refs, hamiltonian, existing_keys)
 
     if not new_map:
         logger.debug(
@@ -161,8 +159,7 @@ def expand_basis_via_connections(
 
     n_added = expanded.shape[0] - basis.shape[0]
     logger.info(
-        "expand_basis_via_connections: added %d configs "
-        "(basis %d -> %d, %d refs).",
+        "expand_basis_via_connections: added %d configs (basis %d -> %d, %d refs).",
         n_added,
         basis.shape[0],
         expanded.shape[0],

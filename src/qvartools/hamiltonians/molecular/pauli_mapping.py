@@ -37,10 +37,22 @@ __all__ = [
 # Single-qubit Pauli multiplication table: (row, col) -> (phase, result)
 # Phase is a power of i: 0=1, 1=i, 2=-1, 3=-i
 _PAULI_MULT = {
-    ("I", "I"): (0, "I"), ("I", "X"): (0, "X"), ("I", "Y"): (0, "Y"), ("I", "Z"): (0, "Z"),
-    ("X", "I"): (0, "X"), ("X", "X"): (0, "I"), ("X", "Y"): (1, "Z"), ("X", "Z"): (3, "Y"),
-    ("Y", "I"): (0, "Y"), ("Y", "X"): (3, "Z"), ("Y", "Y"): (0, "I"), ("Y", "Z"): (1, "X"),
-    ("Z", "I"): (0, "Z"), ("Z", "X"): (1, "Y"), ("Z", "Y"): (3, "X"), ("Z", "Z"): (0, "I"),
+    ("I", "I"): (0, "I"),
+    ("I", "X"): (0, "X"),
+    ("I", "Y"): (0, "Y"),
+    ("I", "Z"): (0, "Z"),
+    ("X", "I"): (0, "X"),
+    ("X", "X"): (0, "I"),
+    ("X", "Y"): (1, "Z"),
+    ("X", "Z"): (3, "Y"),
+    ("Y", "I"): (0, "Y"),
+    ("Y", "X"): (3, "Z"),
+    ("Y", "Y"): (0, "I"),
+    ("Y", "Z"): (1, "X"),
+    ("Z", "I"): (0, "Z"),
+    ("Z", "X"): (1, "Y"),
+    ("Z", "Y"): (3, "X"),
+    ("Z", "Z"): (0, "I"),
 }
 
 _PHASE_TO_COMPLEX = {0: 1.0, 1: 1j, 2: -1.0, 3: -1j}
@@ -203,7 +215,9 @@ class PauliSum:
         """
         self.terms = {ps: c for ps, c in self.terms.items() if abs(c) > threshold}
 
-    def to_real_lists(self, threshold: float = 1e-12) -> tuple[list[float], list[str], float]:
+    def to_real_lists(
+        self, threshold: float = 1e-12
+    ) -> tuple[list[float], list[str], float]:
         """Export as real-valued coefficient lists, separating the constant.
 
         The all-identity Pauli string is extracted as a scalar constant.
@@ -262,6 +276,7 @@ class PauliSum:
 # ---------------------------------------------------------------------------
 # Jordan-Wigner elementary operators
 # ---------------------------------------------------------------------------
+
 
 def _identity_string(n_qubits: int) -> str:
     """Return the all-identity Pauli string of length *n_qubits*.
@@ -451,6 +466,7 @@ def two_body_op(p: int, q: int, r: int, s: int, n_qubits: int) -> PauliSum:
 # ---------------------------------------------------------------------------
 # Full Hamiltonian transformations
 # ---------------------------------------------------------------------------
+
 
 def molecular_hamiltonian_to_pauli(
     h1e: np.ndarray,

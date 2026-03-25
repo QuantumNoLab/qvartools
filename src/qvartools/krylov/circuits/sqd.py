@@ -18,6 +18,7 @@ Two SQD sub-modes:
 - SQD-Clean (noise_rate=0): particle-conserving samples -> batch diag + extrapolation
 - SQD-Recovery (noise_rate>0): noise injection -> S-CORE recovery loop -> batch diag
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -164,7 +165,9 @@ class SQDSolver:
         enable_recovery = cfg.enable_config_recovery or (cfg.noise_rate > 0)
 
         mode_str = "Recovery" if enable_recovery else "Clean"
-        print(f"SQD ({mode_str}): {n_configs} input configurations, {cfg.num_batches} batches")
+        print(
+            f"SQD ({mode_str}): {n_configs} input configurations, {cfg.num_batches} batches"
+        )
 
         # Step 0: Inject depolarizing noise (emulates quantum hardware noise)
         if cfg.noise_rate > 0:
@@ -251,7 +254,7 @@ class SQDSolver:
                 batch_results.append(result)
                 if progress:
                     print(
-                        f"    Batch {k+1}: E = {result['energy']:.8f} Ha "
+                        f"    Batch {k + 1}: E = {result['energy']:.8f} Ha "
                         f"({len(batch)} configs, var = {result['variance']:.2e})"
                     )
 
@@ -279,7 +282,9 @@ class SQDSolver:
         assert best_results is not None
 
         # Step 4: Energy-variance extrapolation
-        extrapolated_energy, ev_results = self._energy_variance_extrapolation(best_results)
+        extrapolated_energy, ev_results = self._energy_variance_extrapolation(
+            best_results
+        )
 
         # Pick best energy: minimum of batch energies and extrapolated
         batch_energies = [r["energy"] for r in best_results]
@@ -399,7 +404,9 @@ class SQDSolver:
                     if n_flip_actual == 0:
                         continue
 
-                    flip_cols = torch.multinomial(weights, n_flip_actual, replacement=False)
+                    flip_cols = torch.multinomial(
+                        weights, n_flip_actual, replacement=False
+                    )
                     rows = (
                         torch.arange(group.size(0), device=device)
                         .unsqueeze(1)
@@ -411,7 +418,9 @@ class SQDSolver:
                     # Too few particles: flip unoccupied -> occupied.
                     occ_row = occ.unsqueeze(0).expand(group.size(0), -1)
                     distances = torch.abs(occ_row)
-                    weights = self._modified_relu(distances, delta, h) * (1 - group.float())
+                    weights = self._modified_relu(distances, delta, h) * (
+                        1 - group.float()
+                    )
                     weights = weights / (weights.sum(dim=1, keepdim=True) + 1e-12)
 
                     min_empty = int((1 - group).sum(dim=1).min().item())
@@ -419,7 +428,9 @@ class SQDSolver:
                     if n_flip_actual == 0:
                         continue
 
-                    flip_cols = torch.multinomial(weights, n_flip_actual, replacement=False)
+                    flip_cols = torch.multinomial(
+                        weights, n_flip_actual, replacement=False
+                    )
                     rows = (
                         torch.arange(group.size(0), device=device)
                         .unsqueeze(1)
@@ -454,7 +465,9 @@ class SQDSolver:
 
         if h > 0:
             result[low_mask] = delta * y[low_mask] / h
-        result[high_mask] = delta + (1.0 - delta) * (y[high_mask] - h) / max(1.0 - h, 1e-12)
+        result[high_mask] = delta + (1.0 - delta) * (y[high_mask] - h) / max(
+            1.0 - h, 1e-12
+        )
 
         return result.clamp(min=1e-12)
 
@@ -761,7 +774,9 @@ class SQDSolver:
                 H_np = H_work.detach().cpu().numpy()
                 eigenvalues_np, eigenvectors_np = np.linalg.eigh(H_np)
                 E0 = float(eigenvalues_np[0])
-                ground_state = torch.from_numpy(eigenvectors_np[:, 0]).double().to(device)
+                ground_state = (
+                    torch.from_numpy(eigenvectors_np[:, 0]).double().to(device)
+                )
 
         # Compute variance on GPU: <H^2> - <H>^2
         Hv = H_work @ ground_state
@@ -817,7 +832,9 @@ class SQDSolver:
             b_plus = (beta_diff == 1).sum(dim=2)
             b_minus = (beta_diff == -1).sum(dim=2)
 
-            count_match = (a_plus == 1) & (a_minus == 1) & (b_plus == 1) & (b_minus == 1)
+            count_match = (
+                (a_plus == 1) & (a_minus == 1) & (b_plus == 1) & (b_minus == 1)
+            )
 
             a_plus_pos = (alpha_diff == 1).float().argmax(dim=2)
             a_minus_pos = (alpha_diff == -1).float().argmax(dim=2)
@@ -899,7 +916,10 @@ class SQDSolver:
                 variances_list.append(r["variance"])
 
         if len(energies_list) < 3:
-            return None, {"fit_quality": "insufficient_data", "n_points": len(energies_list)}
+            return None, {
+                "fit_quality": "insufficient_data",
+                "n_points": len(energies_list),
+            }
 
         energies = np.array(energies_list)
         variances = np.array(variances_list)

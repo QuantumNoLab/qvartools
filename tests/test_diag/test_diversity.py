@@ -72,20 +72,20 @@ class TestDiversitySelector:
         )
         return DiversitySelector(cfg, reference, n_orbitals=6)
 
-    def test_select_returns_correct_number(
-        self, selector: DiversitySelector
-    ) -> None:
+    def test_select_returns_correct_number(self, selector: DiversitySelector) -> None:
         # Build pool: reference + configs at various excitation ranks
         ref = torch.tensor([1, 1, 1, 0, 0, 0])
-        configs = torch.stack([
-            ref,
-            torch.tensor([1, 1, 0, 1, 0, 0]),  # rank 2
-            torch.tensor([1, 0, 1, 0, 1, 0]),  # rank 2
-            torch.tensor([0, 1, 1, 1, 0, 0]),  # rank 2
-            torch.tensor([1, 0, 0, 1, 1, 0]),  # rank 4
-            torch.tensor([0, 1, 0, 0, 1, 1]),  # rank 4
-            torch.tensor([0, 0, 1, 1, 1, 0]),  # rank 4
-        ])
+        configs = torch.stack(
+            [
+                ref,
+                torch.tensor([1, 1, 0, 1, 0, 0]),  # rank 2
+                torch.tensor([1, 0, 1, 0, 1, 0]),  # rank 2
+                torch.tensor([0, 1, 1, 1, 0, 0]),  # rank 2
+                torch.tensor([1, 0, 0, 1, 1, 0]),  # rank 4
+                torch.tensor([0, 1, 0, 0, 1, 1]),  # rank 4
+                torch.tensor([0, 0, 1, 1, 1, 0]),  # rank 4
+            ]
+        )
         weights = torch.ones(configs.shape[0])
 
         selected, stats = selector.select(configs, weights)

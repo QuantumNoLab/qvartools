@@ -145,9 +145,7 @@ class KrylovBasisSampler:
             numerical issues).
         """
         if krylov_power < 0:
-            raise ValueError(
-                f"krylov_power must be >= 0, got {krylov_power}"
-            )
+            raise ValueError(f"krylov_power must be >= 0, got {krylov_power}")
 
         hilbert_dim = self.hamiltonian.hilbert_dim
 
@@ -206,9 +204,7 @@ class KrylovBasisSampler:
         probabilities = np.abs(state) ** 2
         prob_sum = probabilities.sum()
         if prob_sum < 1e-15:
-            raise RuntimeError(
-                "Evolved state has near-zero norm; cannot sample."
-            )
+            raise RuntimeError("Evolved state has near-zero norm; cannot sample.")
         probabilities = probabilities / prob_sum
 
         # Sample indices

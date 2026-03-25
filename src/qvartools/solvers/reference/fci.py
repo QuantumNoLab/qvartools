@@ -58,9 +58,7 @@ class FCISolver(Solver):
             raise ValueError(f"max_configs must be >= 1, got {max_configs}")
         self.max_configs: int = max_configs
 
-    def solve(
-        self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]) -> SolverResult:
         """Compute the FCI ground-state energy.
 
         Parameters
@@ -88,9 +86,7 @@ class FCISolver(Solver):
         )
 
         if energy is None:
-            energy, diag_dim, converged, metadata = self._dense_fallback(
-                hamiltonian
-            )
+            energy, diag_dim, converged, metadata = self._dense_fallback(hamiltonian)
 
         wall_time = time.perf_counter() - t_start
 
@@ -176,9 +172,7 @@ class FCISolver(Solver):
 
         return float(e_fci), diag_dim, True, metadata
 
-    def _dense_fallback(
-        self, hamiltonian: Hamiltonian
-    ) -> tuple:
+    def _dense_fallback(self, hamiltonian: Hamiltonian) -> tuple:
         """Fall back to dense exact diagonalisation.
 
         Parameters

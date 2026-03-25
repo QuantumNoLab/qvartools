@@ -78,7 +78,9 @@ class TestGenerateCandidateConfigs:
 
     def test_candidates_not_in_basis(self, heisenberg_4, small_basis):
         candidates = _generate_candidate_configs(heisenberg_4, small_basis)
-        basis_set = {tuple(small_basis[i].tolist()) for i in range(small_basis.shape[0])}
+        basis_set = {
+            tuple(small_basis[i].tolist()) for i in range(small_basis.shape[0])
+        }
         for i in range(candidates.shape[0]):
             assert tuple(candidates[i].tolist()) not in basis_set
 
@@ -97,7 +99,9 @@ class TestGenerateCandidateConfigs:
 class TestResidualBasedExpander:
     """Tests for ResidualBasedExpander."""
 
-    def test_expand_basis_returns_larger(self, heisenberg_4, small_basis, initial_eigenpair):
+    def test_expand_basis_returns_larger(
+        self, heisenberg_4, small_basis, initial_eigenpair
+    ):
         energy, eigvec = initial_eigenpair
         config = ResidualExpansionConfig(
             max_configs_per_iter=50,
@@ -112,7 +116,9 @@ class TestResidualBasedExpander:
         assert "iterations" in stats
         assert "final_energy" in stats
 
-    def test_expanded_energy_variational(self, heisenberg_4, small_basis, initial_eigenpair):
+    def test_expanded_energy_variational(
+        self, heisenberg_4, small_basis, initial_eigenpair
+    ):
         """Expanded basis energy must be <= initial energy (variational principle)."""
         energy, eigvec = initial_eigenpair
         config = ResidualExpansionConfig(
@@ -151,7 +157,9 @@ class TestResidualBasedExpander:
 class TestSelectedCIExpander:
     """Tests for SelectedCIExpander (CIPSI-style)."""
 
-    def test_expand_basis_returns_larger(self, heisenberg_4, small_basis, initial_eigenpair):
+    def test_expand_basis_returns_larger(
+        self, heisenberg_4, small_basis, initial_eigenpair
+    ):
         energy, eigvec = initial_eigenpair
         config = ResidualExpansionConfig(
             max_configs_per_iter=50,
@@ -165,7 +173,9 @@ class TestSelectedCIExpander:
         assert expanded.shape[0] >= small_basis.shape[0]
         assert "pt2_corrections" in stats
 
-    def test_expanded_energy_variational(self, heisenberg_4, small_basis, initial_eigenpair):
+    def test_expanded_energy_variational(
+        self, heisenberg_4, small_basis, initial_eigenpair
+    ):
         """Expanded basis energy must be <= initial energy."""
         energy, eigvec = initial_eigenpair
         config = ResidualExpansionConfig(

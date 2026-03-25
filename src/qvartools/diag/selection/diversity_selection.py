@@ -104,13 +104,9 @@ class DiversityConfig:
             + self.rank_4_plus_fraction
         )
         if abs(total - 1.0) > 1e-6:
-            raise ValueError(
-                f"Rank fractions must sum to 1.0, got {total:.6f}"
-            )
+            raise ValueError(f"Rank fractions must sum to 1.0, got {total:.6f}")
         if self.max_configs < 1:
-            raise ValueError(
-                f"max_configs must be >= 1, got {self.max_configs}"
-            )
+            raise ValueError(f"max_configs must be >= 1, got {self.max_configs}")
         if self.min_hamming_distance < 0:
             raise ValueError(
                 f"min_hamming_distance must be >= 0, got {self.min_hamming_distance}"
@@ -233,7 +229,9 @@ class DiversitySelector:
         rank_selected_counts: dict[int, int] = {}
 
         # Bit-pack for fast Hamming if we have a minimum distance constraint
-        packed = bitpack_configs(configs) if self._config.min_hamming_distance > 0 else None
+        packed = (
+            bitpack_configs(configs) if self._config.min_hamming_distance > 0 else None
+        )
 
         for rank_key, quota in sorted(rank_quotas.items()):
             if rank_key < 4:
@@ -254,20 +252,18 @@ class DiversitySelector:
             sorted_bucket = bucket_indices[sorted_order]
 
             if self._config.use_dpp_selection and packed is not None:
-                bucket_selected = self._dpp_select(
-                    sorted_bucket, packed, quota
-                )
+                bucket_selected = self._dpp_select(sorted_bucket, packed, quota)
             else:
-                bucket_selected = self._greedy_select(
-                    sorted_bucket, packed, quota
-                )
+                bucket_selected = self._greedy_select(sorted_bucket, packed, quota)
 
             selected_indices.extend(bucket_selected)
             rank_selected_counts[rank_key] = len(bucket_selected)
 
         if len(selected_indices) == 0:
             logger.warning("No configurations selected; returning empty tensor.")
-            empty = torch.empty(0, self._n_orbitals, dtype=configs.dtype, device=configs.device)
+            empty = torch.empty(
+                0, self._n_orbitals, dtype=configs.dtype, device=configs.device
+            )
             stats = {
                 "total_pool": n_pool,
                 "n_selected": 0,
@@ -277,7 +273,9 @@ class DiversitySelector:
             }
             return empty, stats
 
-        idx_tensor = torch.tensor(selected_indices, dtype=torch.long, device=configs.device)
+        idx_tensor = torch.tensor(
+            selected_indices, dtype=torch.long, device=configs.device
+        )
         selected = configs[idx_tensor]
 
         stats = {
@@ -405,7 +403,9 @@ class DiversitySelector:
                 if len(selected) == 0:
                     score = float(kernel[r, r].item())
                 else:
-                    sel_tensor = torch.tensor(selected, dtype=torch.long, device=kernel.device)
+                    sel_tensor = torch.tensor(
+                        selected, dtype=torch.long, device=kernel.device
+                    )
                     k_ss = kernel[sel_tensor][:, sel_tensor]
                     k_new_row = kernel[r, sel_tensor].unsqueeze(0)
                     k_new_diag = kernel[r, r].unsqueeze(0).unsqueeze(0)
@@ -417,7 +417,9 @@ class DiversitySelector:
                         dim=0,
                     )
                     sign, logabsdet = torch.linalg.slogdet(augmented)
-                    score = float(logabsdet.item()) if sign.item() > 0 else -float("inf")
+                    score = (
+                        float(logabsdet.item()) if sign.item() > 0 else -float("inf")
+                    )
 
                 if score > best_score:
                     best_score = score

@@ -114,9 +114,7 @@ class IterativeNFSKQDSolver(Solver):
             merged_skqd.update(skqd_config)
         self.skqd_config: dict[str, Any] = merged_skqd
 
-    def solve(
-        self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]) -> SolverResult:
         """Run the iterative NF-SKQD pipeline.
 
         Parameters
@@ -207,9 +205,7 @@ class IterativeNFSKQDSolver(Solver):
             # Extract eigenvector for feedback (from final projected solve)
             builder = ProjectedHamiltonianBuilder(hamiltonian)
             h_proj = builder.build(accumulated_basis.cpu())
-            s_proj = scipy.sparse.eye(
-                accumulated_basis.shape[0], format="csr"
-            )
+            s_proj = scipy.sparse.eye(accumulated_basis.shape[0], format="csr")
             _, eig_vecs = solve_generalized_eigenvalue(h_proj, s_proj, k=1)
             prev_eigvec = eig_vecs[:, 0]
 

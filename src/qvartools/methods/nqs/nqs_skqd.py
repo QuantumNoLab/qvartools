@@ -126,9 +126,7 @@ def run_nqs_skqd(
     n_qubits: int = mol_info["n_qubits"]
     device = torch.device(cfg.device)
 
-    logger.info(
-        "run_nqs_skqd: %d orbitals, %d alpha, %d beta", n_orb, n_alpha, n_beta
-    )
+    logger.info("run_nqs_skqd: %d orbitals, %d alpha, %d beta", n_orb, n_alpha, n_beta)
 
     t_start = time.perf_counter()
 
@@ -192,7 +190,9 @@ def run_nqs_skqd(
 
     logger.info(
         "  basis: %d NQS + %d Krylov = %d total",
-        pre_expand, n_krylov_added, basis.shape[0],
+        pre_expand,
+        n_krylov_added,
+        basis.shape[0],
     )
 
     energy, eigvec, occs = gpu_solve_fermion(basis, hamiltonian)

@@ -48,8 +48,8 @@ class TestConnectionCache:
         elements = torch.tensor([1.0])
 
         cache.put(config, connections, elements)
-        cache.get(config)   # hit
-        cache.get(config)   # hit
+        cache.get(config)  # hit
+        cache.get(config)  # hit
         cache.get(torch.tensor([0, 0, 0, 0]))  # miss
 
         stats = cache.stats()
@@ -83,7 +83,11 @@ class TestConnectionCache:
 
     def test_len(self, cache: ConnectionCache) -> None:
         assert len(cache) == 0
-        cache.put(torch.tensor([1, 0, 0, 0]), torch.tensor([[0, 0, 0, 0]]), torch.tensor([0.0]))
+        cache.put(
+            torch.tensor([1, 0, 0, 0]),
+            torch.tensor([[0, 0, 0, 0]]),
+            torch.tensor([0.0]),
+        )
         assert len(cache) == 1
 
     def test_contains(self, cache: ConnectionCache) -> None:

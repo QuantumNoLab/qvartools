@@ -215,7 +215,9 @@ class PipelineConfig:
     stochastic_connections_fraction: float = 1.0
 
     def adapt_to_system_size(
-        self, n_valid_configs: int, verbose: bool = True,
+        self,
+        n_valid_configs: int,
+        verbose: bool = True,
     ) -> PipelineConfig:
         """Return a new config with parameters scaled for the given system size.
 

@@ -88,13 +88,9 @@ class ResidualExpansionConfig:
                 f"max_configs_per_iter must be >= 1, got {self.max_configs_per_iter}"
             )
         if self.max_iterations < 1:
-            raise ValueError(
-                f"max_iterations must be >= 1, got {self.max_iterations}"
-            )
+            raise ValueError(f"max_iterations must be >= 1, got {self.max_iterations}")
         if self.max_basis_size < 1:
-            raise ValueError(
-                f"max_basis_size must be >= 1, got {self.max_basis_size}"
-            )
+            raise ValueError(f"max_basis_size must be >= 1, got {self.max_basis_size}")
         if self.stagnation_patience < 1:
             raise ValueError(
                 f"stagnation_patience must be >= 1, got {self.stagnation_patience}"
@@ -229,9 +225,7 @@ def _generate_candidate_configs(
     basis_hashes = (basis_cpu.to(torch.int64) * powers.unsqueeze(0)).sum(dim=-1)
     basis_hash_set = set(basis_hashes.tolist())
 
-    cand_hashes = (
-        all_candidates.to(torch.int64) * powers.unsqueeze(0)
-    ).sum(dim=-1)
+    cand_hashes = (all_candidates.to(torch.int64) * powers.unsqueeze(0)).sum(dim=-1)
     mask = torch.tensor(
         [int(h.item()) not in basis_hash_set for h in cand_hashes],
         dtype=torch.bool,

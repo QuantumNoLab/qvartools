@@ -132,17 +132,13 @@ class TestHeisenberg2SiteExact:
         H = J(S^x S^x + S^y S^y + S^z S^z)
         Singlet energy = J * (-3/4) = -0.75 for J=1.
         """
-        h = HeisenbergHamiltonian(
-            num_spins=2, Jx=1.0, Jy=1.0, Jz=1.0, periodic=False
-        )
+        h = HeisenbergHamiltonian(num_spins=2, Jx=1.0, Jy=1.0, Jz=1.0, periodic=False)
         energy, state = h.exact_ground_state()
         assert energy == pytest.approx(-0.75, abs=1e-10)
 
     def test_anisotropic_2site(self):
         """2-site anisotropic: ground state energy from exact diag."""
-        h = HeisenbergHamiltonian(
-            num_spins=2, Jx=1.0, Jy=1.0, Jz=2.0, periodic=False
-        )
+        h = HeisenbergHamiltonian(num_spins=2, Jx=1.0, Jy=1.0, Jz=2.0, periodic=False)
         energy, _ = h.exact_ground_state()
         # For XXZ with Jz=2, the ground state energy can be computed:
         # The 4x4 matrix for 2-site Heisenberg open chain:
@@ -302,12 +298,8 @@ class TestBoundaryConditions:
 
     def test_tfim_periodic_vs_open_differ(self):
         """Periodic and open TFIM should give different energies for N>2."""
-        h_periodic = TransverseFieldIsing(
-            num_spins=4, V=1.0, h=1.0, periodic=True
-        )
-        h_open = TransverseFieldIsing(
-            num_spins=4, V=1.0, h=1.0, periodic=False
-        )
+        h_periodic = TransverseFieldIsing(num_spins=4, V=1.0, h=1.0, periodic=True)
+        h_open = TransverseFieldIsing(num_spins=4, V=1.0, h=1.0, periodic=False)
         e_periodic, _ = h_periodic.exact_ground_state()
         e_open, _ = h_open.exact_ground_state()
         assert e_periodic != pytest.approx(e_open, abs=1e-6)
@@ -325,12 +317,8 @@ class TestBoundaryConditions:
 
     def test_tfim_open_fewer_interactions(self):
         """Open TFIM should have fewer interaction pairs."""
-        h_open = TransverseFieldIsing(
-            num_spins=4, V=1.0, h=1.0, periodic=False
-        )
-        h_periodic = TransverseFieldIsing(
-            num_spins=4, V=1.0, h=1.0, periodic=True
-        )
+        h_open = TransverseFieldIsing(num_spins=4, V=1.0, h=1.0, periodic=False)
+        h_periodic = TransverseFieldIsing(num_spins=4, V=1.0, h=1.0, periodic=True)
         assert len(h_open._interaction_pairs) == 3
         assert len(h_periodic._interaction_pairs) == 4
 

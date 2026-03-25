@@ -169,9 +169,7 @@ def compute_local_energy(
         config_cpu = configs_cpu[idx]
 
         if connection_cache is not None:
-            connected, elements = connection_cache.get(
-                config_cpu, hamiltonian
-            )
+            connected, elements = connection_cache.get(config_cpu, hamiltonian)
         else:
             connected, elements = hamiltonian.get_connections(config_cpu)
 
@@ -183,13 +181,11 @@ def compute_local_energy(
     # --- 4. Single batched NQS evaluation for all connections ------------
     if all_connected:
         all_connected_cat = torch.cat(all_connected, dim=0)  # (N_total, sites)
-        all_elements_cat = torch.cat(all_elements, dim=0)    # (N_total,)
+        all_elements_cat = torch.cat(all_elements, dim=0)  # (N_total,)
 
         connected_dev = all_connected_cat.to(device).float()
         elements_dev = all_elements_cat.to(device).float()
-        owner_dev = torch.tensor(
-            owner_indices, device=device, dtype=torch.long
-        )
+        owner_dev = torch.tensor(owner_indices, device=device, dtype=torch.long)
 
         with torch.no_grad():
             log_amp_conn = nqs.log_amplitude(connected_dev)  # (N_total,)
@@ -293,9 +289,7 @@ def compute_physics_loss(
     updated_initialized : bool
         Whether the baseline is now initialised.
     """
-    e_loc = compute_local_energy(
-        configs, nqs, hamiltonian, device, connection_cache
-    )
+    e_loc = compute_local_energy(configs, nqs, hamiltonian, device, connection_cache)
 
     log_amp = nqs.log_amplitude(configs)
     log_prob = 2.0 * log_amp
@@ -313,8 +307,7 @@ def compute_physics_loss(
             updated_initialized = True
         else:
             updated_baseline = (
-                ema_decay * energy_baseline
-                + (1.0 - ema_decay) * mean_energy
+                ema_decay * energy_baseline + (1.0 - ema_decay) * mean_energy
             )
         centred_e = e_loc - updated_baseline
     else:

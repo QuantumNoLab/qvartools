@@ -227,7 +227,9 @@ def run_hi_nqs_skqd(
 
     logger.info(
         "run_hi_nqs_skqd: %d orbitals, %d alpha, %d beta",
-        n_orb, n_alpha, n_beta,
+        n_orb,
+        n_alpha,
+        n_beta,
     )
 
     t_start = time.perf_counter()
@@ -256,9 +258,7 @@ def run_hi_nqs_skqd(
     converged = False
 
     for iteration in range(cfg.n_iterations):
-        logger.info(
-            "HI+NQS+SKQD iteration %d / %d", iteration + 1, cfg.n_iterations
-        )
+        logger.info("HI+NQS+SKQD iteration %d / %d", iteration + 1, cfg.n_iterations)
 
         # --- NQS sampling ---
         with torch.no_grad():
@@ -325,9 +325,7 @@ def run_hi_nqs_skqd(
                     recovered, (n_alpha, n_beta), mol_info
                 )
             else:
-                e_b, coeffs_b, occs_b = gpu_solve_fermion(
-                    batch_configs, hamiltonian
-                )
+                e_b, coeffs_b, occs_b = gpu_solve_fermion(batch_configs, hamiltonian)
 
             e_b = float(e_b)
             batch_energies.append(e_b)
@@ -345,12 +343,8 @@ def run_hi_nqs_skqd(
 
         # --- Update occupancies ---
         if isinstance(latest_occs, tuple) and len(latest_occs) == 2:
-            occ_alpha = np.clip(
-                np.asarray(latest_occs[0], dtype=np.float64), 0.0, 1.0
-            )
-            occ_beta = np.clip(
-                np.asarray(latest_occs[1], dtype=np.float64), 0.0, 1.0
-            )
+            occ_alpha = np.clip(np.asarray(latest_occs[0], dtype=np.float64), 0.0, 1.0)
+            occ_beta = np.clip(np.asarray(latest_occs[1], dtype=np.float64), 0.0, 1.0)
 
         # --- NQS teacher training ---
         if best_coeffs is not None and best_batch_configs is not None:

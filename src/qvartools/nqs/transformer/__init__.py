@@ -1,4 +1,5 @@
 """transformer --- Transformer-based NQS architectures."""
+
 from __future__ import annotations
 
 from qvartools.nqs.transformer.attention import CausalSelfAttention, CrossAttention

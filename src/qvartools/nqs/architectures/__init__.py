@@ -1,4 +1,5 @@
 """architectures --- NQS architecture implementations."""
+
 from __future__ import annotations
 
 from qvartools.nqs.architectures.complex_nqs import ComplexNQS

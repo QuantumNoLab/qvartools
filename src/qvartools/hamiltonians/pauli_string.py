@@ -49,9 +49,7 @@ class PauliString:
 
     _VALID_PAULIS = frozenset({"I", "X", "Y", "Z"})
 
-    def __init__(
-        self, paulis: list[str], coefficient: complex = 1.0
-    ) -> None:
+    def __init__(self, paulis: list[str], coefficient: complex = 1.0) -> None:
         for p in paulis:
             if p not in self._VALID_PAULIS:
                 raise ValueError(
@@ -61,9 +59,7 @@ class PauliString:
         self.coefficient: complex = complex(coefficient)
         self.num_qubits: int = len(paulis)
 
-    def apply(
-        self, config: torch.Tensor
-    ) -> tuple[torch.Tensor | None, complex]:
+    def apply(self, config: torch.Tensor) -> tuple[torch.Tensor | None, complex]:
         """Apply this Pauli string to a computational-basis state.
 
         The computational basis is ``|0⟩, |1⟩`` per qubit.  The rules are:

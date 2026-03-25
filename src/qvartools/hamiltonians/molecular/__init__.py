@@ -1,4 +1,5 @@
 """molecular --- Molecular electronic-structure Hamiltonians."""
+
 from __future__ import annotations
 
 from qvartools.hamiltonians.integrals import (

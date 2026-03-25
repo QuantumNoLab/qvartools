@@ -114,9 +114,7 @@ class SQDBatchedSolver(Solver):
     # Public API
     # ------------------------------------------------------------------
 
-    def solve(
-        self, hamiltonian: Any, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Any, mol_info: dict[str, Any]) -> SolverResult:
         """Run batched SQD and return the ground-state energy estimate.
 
         Parameters
@@ -298,6 +296,6 @@ def _compute_orbital_occupancies(
     np.ndarray
         Orbital occupancies, shape ``(n_sites,)``.
     """
-    probs = psi ** 2
+    probs = psi**2
     configs_np = configs.cpu().numpy().astype(np.float64)
     return (probs[:, None] * configs_np).sum(axis=0)

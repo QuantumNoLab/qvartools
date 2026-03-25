@@ -19,6 +19,7 @@ from qvartools.hamiltonians import (
 # Helper: build H2 integrals (reusable across tests in this module)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(scope="module")
 def h2_integrals():
     """Compute H2 integrals once for this module."""

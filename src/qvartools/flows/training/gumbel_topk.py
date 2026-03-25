@@ -84,9 +84,7 @@ class GumbelTopK(nn.Module):
         )
 
         # Add Gumbel noise for stochastic selection
-        gumbel_noise = -torch.log(
-            -torch.log(torch.rand_like(logits) + 1e-20) + 1e-20
-        )
+        gumbel_noise = -torch.log(-torch.log(torch.rand_like(logits) + 1e-20) + 1e-20)
         perturbed = (logits + gumbel_noise) / temp
 
         # Iterative softmax to approximate top-k

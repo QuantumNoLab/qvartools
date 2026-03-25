@@ -20,6 +20,7 @@ References:
 - NF-NQS paper: "Improved Ground State Estimation via NF-Assisted NQS"
 - Importance sampling: configurations with low local energy matter more
 """
+
 from __future__ import annotations
 
 import math
@@ -33,8 +34,10 @@ import torch.nn as nn
 try:
     from tqdm import tqdm
 except ImportError:  # pragma: no cover
+
     def tqdm(iterable, **kwargs):  # type: ignore[misc]
         return iterable
+
 
 # Enable TensorFloat32 for better performance on Ampere+ GPUs
 if torch.cuda.is_available():
@@ -52,8 +55,10 @@ except ImportError:  # pragma: no cover
 try:
     from qvartools._utils.hashing.connection_cache import compute_max_cache_size
 except ImportError:  # pragma: no cover
+
     def compute_max_cache_size(**kwargs: Any) -> int:  # type: ignore[misc]
         return 100_000
+
 
 # Config hashing
 try:
@@ -233,7 +238,9 @@ class FlowNQSConfig:
 
     # Early stopping on energy plateau
     early_stopping_patience: int = 100  # Stop if energy doesn't improve for N epochs
-    early_stopping_threshold: float = 0.001  # Minimum improvement (Ha) to reset patience
+    early_stopping_threshold: float = (
+        0.001  # Minimum improvement (Ha) to reset patience
+    )
 
     # === PAPER-ALIGNED ENERGY COMPUTATION ===
     # Use subspace diagonalization for energy (paper's method) instead of local energy
@@ -352,7 +359,9 @@ class PhysicsGuidedFlowTrainer:
         # Optimizers -- exclude log_temperature from gradient updates because
         # temperature is controlled by the external annealing schedule.
         # Including it would let AdamW fight the schedule each step.
-        flow_params = [p for n, p in flow.named_parameters() if "log_temperature" not in n]
+        flow_params = [
+            p for n, p in flow.named_parameters() if "log_temperature" not in n
+        ]
         self.flow_optimizer = torch.optim.AdamW(
             flow_params, lr=config.flow_lr, weight_decay=1e-5
         )
@@ -484,7 +493,9 @@ class PhysicsGuidedFlowTrainer:
                 max_bb = n_bb_total
                 max_ab = n_ab_total
             else:
-                ab_frac = max(0.5, n_ab_total / total_possible if total_possible > 0 else 0.5)
+                ab_frac = max(
+                    0.5, n_ab_total / total_possible if total_possible > 0 else 0.5
+                )
                 remaining_frac = 1.0 - ab_frac
                 aa_frac = (
                     remaining_frac * (n_aa_total / (n_aa_total + n_bb_total))
@@ -554,7 +565,9 @@ class PhysicsGuidedFlowTrainer:
         essential_tensor = torch.stack(essential).to(self.device)
         essential_tensor = torch.unique(essential_tensor, dim=0)
 
-        n_singles = len([c for c in essential if torch.sum(torch.abs(c - hf_state)) == 2])
+        n_singles = len(
+            [c for c in essential if torch.sum(torch.abs(c - hf_state)) == 2]
+        )
         n_doubles = len(essential_tensor) - n_singles - 1
 
         print(
@@ -672,7 +685,9 @@ class PhysicsGuidedFlowTrainer:
                 self.connection_cache.put(cfg, connected, elements)
                 cached += 1
 
-        print(f"  Cached {cached} configurations ({self.connection_cache.stats()['size']} entries)")
+        print(
+            f"  Cached {cached} configurations ({self.connection_cache.stats()['size']} entries)"
+        )
 
     def train(self) -> dict[str, list]:
         """Run the full physics-guided co-training loop.
@@ -714,11 +729,9 @@ class PhysicsGuidedFlowTrainer:
             # Temperature annealing for particle-conserving flow (exponential decay)
             if hasattr(self.flow, "set_temperature"):
                 decay_rate = math.log(100) / max(config.temperature_decay_epochs, 1)
-                temperature = (
-                    config.final_temperature
-                    + (config.initial_temperature - config.final_temperature)
-                    * math.exp(-decay_rate * epoch)
-                )
+                temperature = config.final_temperature + (
+                    config.initial_temperature - config.final_temperature
+                ) * math.exp(-decay_rate * epoch)
                 self.flow.set_temperature(temperature)
 
             # Training step
@@ -732,7 +745,9 @@ class PhysicsGuidedFlowTrainer:
             self.history["unique_ratios"].append(metrics["unique_ratio"])
 
             if "accumulated_energy" in metrics:
-                self.history["accumulated_energies"].append(metrics["accumulated_energy"])
+                self.history["accumulated_energies"].append(
+                    metrics["accumulated_energy"]
+                )
             if self.accumulated_basis is not None:
                 self.history["basis_sizes"].append(len(self.accumulated_basis))
 
@@ -759,7 +774,9 @@ class PhysicsGuidedFlowTrainer:
             # Check convergence
             if epoch >= config.min_epochs:
                 if metrics["unique_ratio"] < config.convergence_threshold:
-                    print(f"\nConverged at epoch {epoch}: unique_ratio={metrics['unique_ratio']:.3f}")
+                    print(
+                        f"\nConverged at epoch {epoch}: unique_ratio={metrics['unique_ratio']:.3f}"
+                    )
                     if self.connection_cache is not None:
                         stats = self.connection_cache.stats()
                         print(
@@ -776,7 +793,10 @@ class PhysicsGuidedFlowTrainer:
             else:
                 self._patience_counter += 1
 
-            if self._patience_counter >= config.early_stopping_patience and epoch >= config.min_epochs:
+            if (
+                self._patience_counter >= config.early_stopping_patience
+                and epoch >= config.min_epochs
+            ):
                 print(
                     f"\nEarly stopping at epoch {epoch}: no energy improvement for "
                     f"{config.early_stopping_patience} epochs (best: {self._best_energy:.6f} Ha)"
@@ -1099,7 +1119,9 @@ class PhysicsGuidedFlowTrainer:
                 return diag
 
             # Step 2: Get ALL connections (may be on Hamiltonian's device, move to trainer's)
-            all_connected, all_elements, all_orig_indices = self._get_connections_batch(configs)
+            all_connected, all_elements, all_orig_indices = self._get_connections_batch(
+                configs
+            )
             all_connected = all_connected.to(self.device)
             all_elements = all_elements.to(self.device)
             all_orig_indices = all_orig_indices.to(self.device)
@@ -1112,7 +1134,9 @@ class PhysicsGuidedFlowTrainer:
 
             # Use compiled NQS if available for faster forward passes
             nqs_forward = (
-                self._nqs_compiled if self._nqs_compiled is not None else self.nqs.log_amplitude
+                self._nqs_compiled
+                if self._nqs_compiled is not None
+                else self.nqs.log_amplitude
             )
 
             # Step 3: Evaluate NQS on original configs (single batch)
@@ -1364,7 +1388,9 @@ class PhysicsGuidedFlowTrainer:
                 combined = torch.cat([self.accumulated_basis, new_configs], dim=0)
                 self.accumulated_basis = torch.unique(combined, dim=0)
             if len(self.accumulated_basis) > max_size:
-                indices = torch.randperm(len(self.accumulated_basis), device=device)[:max_size]
+                indices = torch.randperm(len(self.accumulated_basis), device=device)[
+                    :max_size
+                ]
                 self.accumulated_basis = self.accumulated_basis[indices]
             return
 
@@ -1411,14 +1437,18 @@ class PhysicsGuidedFlowTrainer:
                 remaining_budget = max_size - len(essential_part)
                 if remaining_budget > 0 and len(non_essential_part) > 0:
                     n_keep = min(remaining_budget, len(non_essential_part))
-                    rand_idx = torch.randperm(len(non_essential_part), device=device)[:n_keep]
+                    rand_idx = torch.randperm(len(non_essential_part), device=device)[
+                        :n_keep
+                    ]
                     self.accumulated_basis = torch.cat(
                         [essential_part, non_essential_part[rand_idx]], dim=0
                     )
                 else:
                     self.accumulated_basis = essential_part[:max_size]
             else:
-                indices = torch.randperm(len(self.accumulated_basis), device=device)[:max_size]
+                indices = torch.randperm(len(self.accumulated_basis), device=device)[
+                    :max_size
+                ]
                 self.accumulated_basis = self.accumulated_basis[indices]
 
     def _compute_accumulated_energy(self) -> float:
@@ -1452,7 +1482,9 @@ class PhysicsGuidedFlowTrainer:
 
                 basis = self.accumulated_basis
                 try:
-                    rows, cols, vals = self.hamiltonian.get_sparse_matrix_elements(basis)
+                    rows, cols, vals = self.hamiltonian.get_sparse_matrix_elements(
+                        basis
+                    )
                     rows_np = rows.cpu().numpy()
                     cols_np = cols.cpu().numpy()
                     vals_np = vals.cpu().numpy().astype(np.float64)

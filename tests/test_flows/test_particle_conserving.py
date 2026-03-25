@@ -26,9 +26,7 @@ class TestParticleConservingFlowSampler:
         assert unique.ndim == 2
         assert unique.shape[1] == 10
 
-    def test_particle_conservation(
-        self, flow: ParticleConservingFlowSampler
-    ) -> None:
+    def test_particle_conservation(self, flow: ParticleConservingFlowSampler) -> None:
         configs, _ = flow.sample(batch_size=64)
         alpha_part = configs[:, :5]
         beta_part = configs[:, 5:]
@@ -71,10 +69,13 @@ class TestVerifyParticleConservation:
     """Tests for verify_particle_conservation."""
 
     def test_valid_configs(self) -> None:
-        configs = torch.tensor([
-            [1, 1, 0, 0, 0, 1, 0, 1, 0, 0],
-            [0, 1, 1, 0, 0, 0, 0, 1, 1, 0],
-        ], dtype=torch.float32)
+        configs = torch.tensor(
+            [
+                [1, 1, 0, 0, 0, 1, 0, 1, 0, 0],
+                [0, 1, 1, 0, 0, 0, 0, 1, 1, 0],
+            ],
+            dtype=torch.float32,
+        )
         is_valid, stats = verify_particle_conservation(
             configs, n_orbitals=5, n_alpha=2, n_beta=2
         )
@@ -83,9 +84,12 @@ class TestVerifyParticleConservation:
         assert stats["n_invalid"] == 0
 
     def test_invalid_configs(self) -> None:
-        configs = torch.tensor([
-            [1, 1, 1, 0, 0, 1, 0, 1, 0, 0],  # 3 alpha instead of 2
-        ], dtype=torch.float32)
+        configs = torch.tensor(
+            [
+                [1, 1, 1, 0, 0, 1, 0, 1, 0, 0],  # 3 alpha instead of 2
+            ],
+            dtype=torch.float32,
+        )
         is_valid, stats = verify_particle_conservation(
             configs, n_orbitals=5, n_alpha=2, n_beta=2
         )

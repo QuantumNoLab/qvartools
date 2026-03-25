@@ -93,9 +93,7 @@ def gpu_eigh(matrix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 # ---------------------------------------------------------------------------
 
 
-def gpu_eigsh(
-    matrix: np.ndarray, k: int = 6
-) -> tuple[np.ndarray, np.ndarray]:
+def gpu_eigsh(matrix: np.ndarray, k: int = 6) -> tuple[np.ndarray, np.ndarray]:
     """Compute the lowest *k* eigenvalues of a sparse Hermitian matrix.
 
     Attempts CuPy sparse eigendecomposition; falls back to
@@ -202,9 +200,7 @@ def gpu_solve_fermion(
     if _HAS_CUPY:
         try:
             energy = _cupy_fci(h1e, h2e, n_electrons, n_orbitals)
-            logger.info(
-                "gpu_solve_fermion: CuPy FCI energy = %.12f", energy
-            )
+            logger.info("gpu_solve_fermion: CuPy FCI energy = %.12f", energy)
             return energy
         except Exception as exc:
             logger.warning("CuPy FCI failed (%s), trying PySCF.", exc)
@@ -220,9 +216,7 @@ def gpu_solve_fermion(
     # Strategy 3: Dense diagonalisation
     try:
         energy = _dense_fci(h1e, h2e, n_electrons, n_orbitals)
-        logger.info(
-            "gpu_solve_fermion: Dense diag energy = %.12f", energy
-        )
+        logger.info("gpu_solve_fermion: Dense diag energy = %.12f", energy)
         return energy
     except Exception as exc:
         raise RuntimeError(
@@ -273,9 +267,7 @@ def _cupy_fci(
     energy = float(cp.min(h_fci_gpu).get())
 
     # For more accurate results, use full matrix construction
-    e_fci, _ = cisolver.kernel(
-        h1e, h2e, n_orbitals, (n_alpha, n_beta), nroots=1
-    )
+    e_fci, _ = cisolver.kernel(h1e, h2e, n_orbitals, (n_alpha, n_beta), nroots=1)
     return float(e_fci)
 
 
@@ -312,9 +304,7 @@ def _pyscf_fci(
     cisolver.max_cycle = 200
     cisolver.conv_tol = 1e-10
 
-    e_fci, _ = cisolver.kernel(
-        h1e, h2e, n_orbitals, (n_alpha, n_beta), nroots=1
-    )
+    e_fci, _ = cisolver.kernel(h1e, h2e, n_orbitals, (n_alpha, n_beta), nroots=1)
     return float(e_fci)
 
 
@@ -351,9 +341,7 @@ def _dense_fci(
     n_beta = n_electrons // 2
 
     cisolver = fci.direct_spin1.FCI()
-    h_full = cisolver.absorb_h1e(
-        h1e, h2e, n_orbitals, (n_alpha, n_beta), 0.5
-    )
+    h_full = cisolver.absorb_h1e(h1e, h2e, n_orbitals, (n_alpha, n_beta), 0.5)
 
     na = int(fci.cistring.num_strings(n_orbitals, n_alpha))
     nb = int(fci.cistring.num_strings(n_orbitals, n_beta))

@@ -50,9 +50,7 @@ class TestDenseNQS:
         result = nqs.probability(batch)
         assert result.shape == (8,)
 
-    def test_probability_non_negative(
-        self, nqs: DenseNQS, batch: torch.Tensor
-    ) -> None:
+    def test_probability_non_negative(self, nqs: DenseNQS, batch: torch.Tensor) -> None:
         result = nqs.probability(batch)
         assert (result >= 0).all()
 
@@ -153,9 +151,7 @@ class TestSignedDenseNQS:
         is_pi = torch.isclose(result, torch.full_like(result, torch.pi), atol=1e-6)
         assert (is_zero | is_pi).all()
 
-    def test_feature_caching(
-        self, nqs: SignedDenseNQS, batch: torch.Tensor
-    ) -> None:
+    def test_feature_caching(self, nqs: SignedDenseNQS, batch: torch.Tensor) -> None:
         """Calling log_amplitude and phase with same tensor uses cache."""
         nqs.eval()
         _ = nqs.log_amplitude(batch)

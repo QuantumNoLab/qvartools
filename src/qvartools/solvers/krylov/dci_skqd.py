@@ -82,9 +82,7 @@ class DCISKQDConfig:
 def _build_cipsi_basis(
     hamiltonian: Any,
     config: DCISKQDConfig,
-) -> tuple[
-    torch.Tensor, set[int], float | None, np.ndarray | None, list[float]
-]:
+) -> tuple[torch.Tensor, set[int], float | None, np.ndarray | None, list[float]]:
     """Run the CIPSI seeding phase to build an initial basis via PT2 selection.
 
     Parameters
@@ -158,9 +156,7 @@ def _build_cipsi_basis(
 
         # PT2 importance scoring
         cand_hash_list = list(candidate_configs.keys())
-        cand_tensor = torch.stack(
-            [candidate_configs[h] for h in cand_hash_list]
-        )
+        cand_tensor = torch.stack([candidate_configs[h] for h in cand_hash_list])
         h_diag = np.asarray(
             hamiltonian.diagonal_elements_batch(cand_tensor), dtype=np.float64
         )
@@ -192,9 +188,7 @@ def _build_cipsi_basis(
 # ---------------------------------------------------------------------------
 
 
-def _diagonalize(
-    hamiltonian: Any, basis: torch.Tensor
-) -> tuple[float, np.ndarray]:
+def _diagonalize(hamiltonian: Any, basis: torch.Tensor) -> tuple[float, np.ndarray]:
     """Diagonalize the projected Hamiltonian in *basis*.
 
     Returns ``(e0, psi0)`` -- the ground-state energy and eigenvector.
@@ -209,9 +203,7 @@ def _diagonalize(
         from scipy.sparse import csr_matrix
         from scipy.sparse.linalg import eigsh
 
-        eigenvalues, eigenvectors = eigsh(
-            csr_matrix(H_np), k=1, which="SA"
-        )
+        eigenvalues, eigenvectors = eigsh(csr_matrix(H_np), k=1, which="SA")
 
     return float(eigenvalues[0]), eigenvectors[:, 0]
 
@@ -238,9 +230,7 @@ class DCISKQDSolverB(Solver):
     def __init__(self, config: DCISKQDConfig | None = None) -> None:
         self.config = config or DCISKQDConfig()
 
-    def solve(
-        self, hamiltonian: Any, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Any, mol_info: dict[str, Any]) -> SolverResult:
         """Run DCI-SKQD-B.
 
         Parameters
@@ -305,11 +295,9 @@ class DCISKQDSolverB(Solver):
                     if h not in basis_hashes:
                         h_elem = float(elements[k])
                         coupling = c_i * h_elem
-                        h_xx = float(
-                            hamiltonian.diagonal_element(connected[k])
-                        )
+                        h_xx = float(hamiltonian.diagonal_element(connected[k]))
                         denom = abs(e0 - h_xx) + 1e-12
-                        importance = coupling ** 2 / denom
+                        importance = coupling**2 / denom
 
                         new_configs.append(connected[k])
                         new_importance.append(importance)
@@ -368,9 +356,7 @@ class DCISKQDSolverC(Solver):
     def __init__(self, config: DCISKQDConfig | None = None) -> None:
         self.config = config or DCISKQDConfig()
 
-    def solve(
-        self, hamiltonian: Any, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Any, mol_info: dict[str, Any]) -> SolverResult:
         """Run DCI-SKQD-C.
 
         Parameters
@@ -446,9 +432,7 @@ class DCISKQDSolverC(Solver):
             top_k = min(cfg.expansion_size, len(external_configs))
             top_indices = np.argsort(scores_arr)[-top_k:]
 
-            new_batch = torch.stack(
-                [external_configs[i] for i in top_indices]
-            )
+            new_batch = torch.stack([external_configs[i] for i in top_indices])
             basis = torch.cat([basis, new_batch], dim=0)
 
         wall_time = time.perf_counter() - t0

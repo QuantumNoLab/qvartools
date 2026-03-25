@@ -45,8 +45,10 @@ def __getattr__(name: str):
     """Lazy re-export of FlowGuidedSKQD to avoid circular import."""
     if name == "FlowGuidedSKQD":
         from qvartools.krylov.basis.flow_guided import FlowGuidedSKQD
+
         return FlowGuidedSKQD
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 logger = logging.getLogger(__name__)
 
@@ -106,9 +108,7 @@ class SKQDConfig:
     def __post_init__(self) -> None:
         """Validate configuration values."""
         if self.max_krylov_dim < 1:
-            raise ValueError(
-                f"max_krylov_dim must be >= 1, got {self.max_krylov_dim}"
-            )
+            raise ValueError(f"max_krylov_dim must be >= 1, got {self.max_krylov_dim}")
         if self.time_step <= 0.0:
             raise ValueError(f"time_step must be > 0, got {self.time_step}")
         if self.shots_per_krylov < 1:
@@ -120,9 +120,7 @@ class SKQDConfig:
                 f"num_eigenvalues must be >= 1, got {self.num_eigenvalues}"
             )
         if self.regularization < 0.0:
-            raise ValueError(
-                f"regularization must be >= 0, got {self.regularization}"
-            )
+            raise ValueError(f"regularization must be >= 0, got {self.regularization}")
 
 
 # ---------------------------------------------------------------------------
@@ -407,9 +405,7 @@ class SampleBasedKrylovDiagonalization:
         self._initial_state_gpu = torch.tensor(
             self._initial_state, dtype=torch.complex128, device=device
         )
-        logger.info(
-            "Precomputed GPU matrix exponential: dim=%d", self.subspace_dim
-        )
+        logger.info("Precomputed GPU matrix exponential: dim=%d", self.subspace_dim)
 
     def extract_projected_submatrix(
         self, configs: torch.Tensor
@@ -448,9 +444,7 @@ class SampleBasedKrylovDiagonalization:
                 [1 << k for k in range(num_sites - 1, -1, -1)],
                 dtype=torch.int64,
             )
-            hashes = (
-                configs.cpu().to(torch.int64) * powers.unsqueeze(0)
-            ).sum(dim=-1)
+            hashes = (configs.cpu().to(torch.int64) * powers.unsqueeze(0)).sum(dim=-1)
 
         # Map each config to its subspace index
         indices = np.empty(n, dtype=np.intp)

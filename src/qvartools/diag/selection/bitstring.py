@@ -26,6 +26,7 @@ __all__ = [
 # Bitstring <-> integer conversions
 # ---------------------------------------------------------------------------
 
+
 def bitstring_to_int(bitstring: str) -> int:
     """Convert a binary bitstring to its integer representation.
 
@@ -73,6 +74,7 @@ def int_to_bitstring(value: int, num_bits: int) -> str:
 # ---------------------------------------------------------------------------
 # Measurement-result helpers
 # ---------------------------------------------------------------------------
+
 
 def get_basis_states_as_array(
     measurement_results: dict[str, int],
@@ -178,23 +180,16 @@ def filter_high_probability_states(
         return {}
 
     # Compute probabilities
-    probs = {
-        bs: count / total_counts
-        for bs, count in measurement_results.items()
-    }
+    probs = {bs: count / total_counts for bs, count in measurement_results.items()}
 
     # Filter by threshold
     filtered = {
-        bs: count
-        for bs, count in measurement_results.items()
-        if probs[bs] >= threshold
+        bs: count for bs, count in measurement_results.items() if probs[bs] >= threshold
     }
 
     # Limit number of states
     if max_states is not None and len(filtered) > max_states:
-        sorted_states = sorted(
-            filtered.items(), key=lambda x: x[1], reverse=True
-        )
+        sorted_states = sorted(filtered.items(), key=lambda x: x[1], reverse=True)
         filtered = dict(sorted_states[:max_states])
 
     return filtered
@@ -203,6 +198,7 @@ def filter_high_probability_states(
 # ---------------------------------------------------------------------------
 # Basis-set analysis
 # ---------------------------------------------------------------------------
+
 
 def compute_basis_overlap(
     basis1: np.ndarray,

@@ -1,4 +1,5 @@
 """iterative --- Iterative self-consistent solvers."""
+
 from __future__ import annotations
 
 from qvartools.solvers.iterative.iterative_skqd import IterativeNFSKQDSolver

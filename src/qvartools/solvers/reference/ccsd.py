@@ -36,9 +36,7 @@ class CCSDSolver(Solver):
     'CCSD'
     """
 
-    def solve(
-        self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]) -> SolverResult:
         """Compute the CCSD ground-state energy.
 
         Parameters
@@ -65,8 +63,7 @@ class CCSDSolver(Solver):
             from pyscf import cc, gto, scf
         except ImportError as exc:
             raise ImportError(
-                "PySCF is required for CCSDSolver. "
-                "Install it with: pip install pyscf"
+                "PySCF is required for CCSDSolver. Install it with: pip install pyscf"
             ) from exc
 
         t_start = time.perf_counter()

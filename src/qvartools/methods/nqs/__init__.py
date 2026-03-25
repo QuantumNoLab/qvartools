@@ -1,4 +1,5 @@
 """nqs --- NQS-based method pipelines."""
+
 from __future__ import annotations
 
 from qvartools.methods.nqs.hi_nqs_skqd import HINQSSKQDConfig, run_hi_nqs_skqd

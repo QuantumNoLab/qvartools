@@ -140,9 +140,7 @@ class PhysicsGuidedConfig:
 # ---------------------------------------------------------------------------
 
 
-def _generate_hf_config(
-    n_orbitals: int, n_alpha: int, n_beta: int
-) -> torch.Tensor:
+def _generate_hf_config(n_orbitals: int, n_alpha: int, n_beta: int) -> torch.Tensor:
     """Generate the Hartree--Fock reference configuration.
 
     The HF configuration occupies the lowest-energy orbitals: the first
@@ -389,9 +387,7 @@ class PhysicsGuidedFlowTrainer:
 
         self.connection_cache: ConnectionCache | None = None
         if config.use_connection_cache:
-            self.connection_cache = ConnectionCache(
-                max_size=config.max_cache_size
-            )
+            self.connection_cache = ConnectionCache(max_size=config.max_cache_size)
 
         # Inject essential configurations if requested
         if config.inject_essential_configs:
@@ -421,17 +417,13 @@ class PhysicsGuidedFlowTrainer:
 
         # Single excitations
         if self.config.include_singles_in_basis:
-            singles = _generate_single_excitations(
-                hf, n_orbitals, n_alpha, n_beta
-            )
+            singles = _generate_single_excitations(hf, n_orbitals, n_alpha, n_beta)
             if singles.shape[0] > 0:
                 essential.append(singles)
 
         # Double excitations
         if self.config.include_doubles_in_basis:
-            doubles = _generate_double_excitations(
-                hf, n_orbitals, n_alpha, n_beta
-            )
+            doubles = _generate_double_excitations(hf, n_orbitals, n_alpha, n_beta)
             if doubles.shape[0] > 0:
                 essential.append(doubles)
 
@@ -462,9 +454,7 @@ class PhysicsGuidedFlowTrainer:
         if self.accumulated_basis is None:
             self.accumulated_basis = torch.unique(new_configs, dim=0)
         else:
-            combined = torch.cat(
-                [self.accumulated_basis, new_configs], dim=0
-            )
+            combined = torch.cat([self.accumulated_basis, new_configs], dim=0)
             self.accumulated_basis = torch.unique(combined, dim=0)
 
     def _get_temperature(self, epoch: int) -> float:
@@ -560,18 +550,14 @@ class PhysicsGuidedFlowTrainer:
                 log_probs_flow = self.flow.log_prob_continuous(y_approx)
             else:
                 # Fallback: use uniform log-prob (no teacher signal)
-                log_probs_flow = torch.zeros(
-                    all_configs.shape[0], device=self.device
-                )
+                log_probs_flow = torch.zeros(all_configs.shape[0], device=self.device)
 
             # Compute losses
             loss = torch.tensor(0.0, device=self.device)
 
             teacher_loss_val = 0.0
             if cfg.teacher_weight > 0.0:
-                t_loss = compute_teacher_loss(
-                    all_configs, log_probs_flow, self.nqs
-                )
+                t_loss = compute_teacher_loss(all_configs, log_probs_flow, self.nqs)
                 loss = loss + cfg.teacher_weight * t_loss
                 teacher_loss_val = float(t_loss.detach())
 
@@ -618,9 +604,7 @@ class PhysicsGuidedFlowTrainer:
         n_batches = max(cfg.num_batches, 1)
         unique_ratio = total_unique / max(total_samples, 1)
         basis_size = (
-            self.accumulated_basis.shape[0]
-            if self.accumulated_basis is not None
-            else 0
+            self.accumulated_basis.shape[0] if self.accumulated_basis is not None else 0
         )
 
         return {

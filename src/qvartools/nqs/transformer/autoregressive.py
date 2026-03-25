@@ -87,9 +87,7 @@ class TransformerBlock(nn.Module):
         self.ln_ca: nn.LayerNorm | None = None
         if has_cross_attn:
             self.ln_ca = nn.LayerNorm(embed_dim)
-            self.cross_attn = CrossAttention(
-                embed_dim, n_heads, dropout=dropout
-            )
+            self.cross_attn = CrossAttention(embed_dim, n_heads, dropout=dropout)
 
         # Feed-forward network
         self.ln_ffn: nn.LayerNorm = nn.LayerNorm(embed_dim)
@@ -242,8 +240,11 @@ class AutoregressiveTransformer(nn.Module):
         self.alpha_blocks: nn.ModuleList = nn.ModuleList(
             [
                 TransformerBlock(
-                    embed_dim, n_heads, ffn_dim,
-                    dropout=dropout, has_cross_attn=False,
+                    embed_dim,
+                    n_heads,
+                    ffn_dim,
+                    dropout=dropout,
+                    has_cross_attn=False,
                 )
                 for _ in range(n_layers)
             ]
@@ -253,8 +254,11 @@ class AutoregressiveTransformer(nn.Module):
         self.beta_blocks: nn.ModuleList = nn.ModuleList(
             [
                 TransformerBlock(
-                    embed_dim, n_heads, ffn_dim,
-                    dropout=dropout, has_cross_attn=True,
+                    embed_dim,
+                    n_heads,
+                    ffn_dim,
+                    dropout=dropout,
+                    has_cross_attn=True,
                 )
                 for _ in range(n_layers)
             ]
@@ -455,12 +459,8 @@ class AutoregressiveTransformer(nn.Module):
         device = next(self.parameters()).device
         n_orb = self.n_orbitals
 
-        alpha_config = torch.zeros(
-            n_samples, n_orb, dtype=torch.long, device=device
-        )
-        beta_config = torch.zeros(
-            n_samples, n_orb, dtype=torch.long, device=device
-        )
+        alpha_config = torch.zeros(n_samples, n_orb, dtype=torch.long, device=device)
+        beta_config = torch.zeros(n_samples, n_orb, dtype=torch.long, device=device)
 
         # --- Sample alpha channel ---
         self._enable_cache()
@@ -481,9 +481,7 @@ class AutoregressiveTransformer(nn.Module):
             start_tok = torch.full(
                 (n_samples, 1), fill_value=2, dtype=torch.long, device=device
             )
-            alpha_input = torch.cat(
-                [start_tok, alpha_config[:, :-1]], dim=1
-            )
+            alpha_input = torch.cat([start_tok, alpha_config[:, :-1]], dim=1)
             alpha_repr = self._run_alpha(alpha_input)
 
             # --- Sample beta channel ---

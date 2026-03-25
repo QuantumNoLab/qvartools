@@ -313,9 +313,7 @@ def analyze_spectrum(
     actual_k = min(k, n)
 
     S = scipy.sparse.eye(n, format="csr")
-    eigenvalues, _ = solve_generalized_eigenvalue(
-        H, S, k=actual_k, use_gpu=use_gpu
-    )
+    eigenvalues, _ = solve_generalized_eigenvalue(H, S, k=actual_k, use_gpu=use_gpu)
 
     gaps = np.diff(eigenvalues)
     first_gap = float(gaps[0]) if len(gaps) > 0 else 0.0
@@ -362,7 +360,9 @@ def regularize_overlap_matrix(
     >>> S = np.array([[1.0, 0.99], [0.99, 1.0]])
     >>> S_reg = regularize_overlap_matrix(S, threshold=0.1)
     """
-    S_dense = S.toarray() if scipy.sparse.issparse(S) else np.asarray(S, dtype=np.float64)
+    S_dense = (
+        S.toarray() if scipy.sparse.issparse(S) else np.asarray(S, dtype=np.float64)
+    )
 
     if use_gpu:
         try:

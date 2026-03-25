@@ -1,4 +1,5 @@
 """selection --- Basis selection and bitstring analysis."""
+
 from __future__ import annotations
 
 from qvartools.diag.selection.bitstring import (

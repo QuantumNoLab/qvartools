@@ -87,9 +87,7 @@ class ConnectionCache:
         self._hits: int = 0
         self._misses: int = 0
 
-    def get(
-        self, config: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor] | None:
+    def get(self, config: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor] | None:
         """Look up cached connections for a configuration.
 
         Parameters

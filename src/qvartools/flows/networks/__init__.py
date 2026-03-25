@@ -1,4 +1,5 @@
 """networks --- Normalizing flow network architectures."""
+
 from __future__ import annotations
 
 from qvartools.flows.networks.discrete_flow import DiscreteFlowSampler

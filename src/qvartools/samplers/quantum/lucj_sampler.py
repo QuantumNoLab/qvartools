@@ -124,9 +124,7 @@ class LUCJSampler(Sampler):
         # Assemble Qiskit circuit
         qc = QuantumCircuit(self.n_qubits)
         qc.append(
-            PrepareHartreeFockJW(
-                self.n_orbitals, (self.n_alpha, self.n_beta)
-            ),
+            PrepareHartreeFockJW(self.n_orbitals, (self.n_alpha, self.n_beta)),
             range(self.n_qubits),
         )
         qc.append(
@@ -215,15 +213,11 @@ class LUCJSampler(Sampler):
             config = [int(b) for b in bitstring]
             configs_list.extend([config] * count)
 
-        configs = torch.tensor(
-            configs_list, dtype=torch.long, device=self.device
-        )
+        configs = torch.tensor(configs_list, dtype=torch.long, device=self.device)
         unique_configs = torch.unique(configs, dim=0)
 
         # Build bitstring counts
-        bitstrings = [
-            "".join(str(int(b)) for b in row) for row in configs.int()
-        ]
+        bitstrings = ["".join(str(int(b)) for b in row) for row in configs.int()]
         counts: dict[str, int] = dict(Counter(bitstrings))
 
         wall_time = time.perf_counter() - t_start

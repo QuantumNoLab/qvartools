@@ -128,9 +128,7 @@ class OrbitalScoringNetwork(nn.Module):
             if context is not None:
                 ctx = self.context_proj(context.float())  # (batch, context_dim)
             else:
-                ctx = torch.zeros(
-                    batch_size, self.context_dim, device=device
-                )
+                ctx = torch.zeros(batch_size, self.context_dim, device=device)
             net_input = torch.cat(
                 [baseline_expanded, ctx], dim=-1
             )  # (batch, n_orbitals + context_dim)
@@ -227,13 +225,9 @@ class ParticleConservingFlowSampler(nn.Module):
 
         n_orbitals = num_sites // 2
         if n_alpha < 0 or n_alpha > n_orbitals:
-            raise ValueError(
-                f"n_alpha must be in [0, {n_orbitals}], got {n_alpha}"
-            )
+            raise ValueError(f"n_alpha must be in [0, {n_orbitals}], got {n_alpha}")
         if n_beta < 0 or n_beta > n_orbitals:
-            raise ValueError(
-                f"n_beta must be in [0, {n_orbitals}], got {n_beta}"
-            )
+            raise ValueError(f"n_beta must be in [0, {n_orbitals}], got {n_beta}")
 
         self.num_sites: int = num_sites
         self.n_orbitals: int = n_orbitals
@@ -272,9 +266,7 @@ class ParticleConservingFlowSampler(nn.Module):
         self.temperature = max(temperature, self.min_temperature)
         self.selector.temperature = self.temperature
 
-    def _soft_to_hard(
-        self, soft_mask: torch.Tensor, k: int
-    ) -> torch.Tensor:
+    def _soft_to_hard(self, soft_mask: torch.Tensor, k: int) -> torch.Tensor:
         """Convert a soft selection mask to a hard binary mask.
 
         Selects the top-k entries by value and sets them to 1, all
@@ -457,9 +449,7 @@ def verify_particle_conservation(
     True
     """
     if configs.ndim != 2:
-        raise ValueError(
-            f"configs must be 2-dimensional, got shape {configs.shape}"
-        )
+        raise ValueError(f"configs must be 2-dimensional, got shape {configs.shape}")
     expected_cols = 2 * n_orbitals
     if configs.shape[1] != expected_cols:
         raise ValueError(

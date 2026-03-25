@@ -1,4 +1,5 @@
 """classical --- Classical (normalizing flow) configuration samplers."""
+
 from __future__ import annotations
 
 from qvartools.samplers.classical.nf_sampler import NFSampler

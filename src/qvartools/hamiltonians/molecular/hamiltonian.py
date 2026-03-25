@@ -275,8 +275,8 @@ class MolecularHamiltonian(Hamiltonian):
         n = self.n_orb
 
         # Split into alpha and beta occupations (spatial orbital basis)
-        occ_alpha = configs_f[:, :n]   # (batch, n_orb)
-        occ_beta = configs_f[:, n:]    # (batch, n_orb)
+        occ_alpha = configs_f[:, :n]  # (batch, n_orb)
+        occ_beta = configs_f[:, n:]  # (batch, n_orb)
 
         # One-body energy: sum_p h_pp * (n_alpha_p + n_beta_p)
         occ_total = occ_alpha + occ_beta  # (batch, n_orb)
@@ -362,7 +362,9 @@ class MolecularHamiltonian(Hamiltonian):
 
         if conn_np.shape[0] == 0:
             return (
-                torch.empty((0, self.num_sites), dtype=torch.int64, device=config.device),
+                torch.empty(
+                    (0, self.num_sites), dtype=torch.int64, device=config.device
+                ),
                 torch.empty(0, dtype=torch.float64, device=config.device),
             )
 
@@ -421,7 +423,9 @@ class MolecularHamiltonian(Hamiltonian):
 
                     two_body += self._h2e_np[p_spatial, q_spatial, r_spatial, r_spatial]
                     if p_is_alpha == r_is_alpha:
-                        two_body -= self._h2e_np[p_spatial, r_spatial, r_spatial, q_spatial]
+                        two_body -= self._h2e_np[
+                            p_spatial, r_spatial, r_spatial, q_spatial
+                        ]
 
                 me = h_pq + two_body
                 if abs(me) < MATRIX_ELEMENT_TOL:
@@ -467,28 +471,42 @@ class MolecularHamiltonian(Hamiltonian):
                         if p_is_alpha == r_is_alpha:
                             if p_is_alpha == q_is_alpha and r_is_alpha == s_is_alpha:
                                 me = (
-                                    self._h2e_np[p_spatial, q_spatial, r_spatial, s_spatial]
-                                    - self._h2e_np[p_spatial, s_spatial, r_spatial, q_spatial]
+                                    self._h2e_np[
+                                        p_spatial, q_spatial, r_spatial, s_spatial
+                                    ]
+                                    - self._h2e_np[
+                                        p_spatial, s_spatial, r_spatial, q_spatial
+                                    ]
                                 )
                             elif p_is_alpha == s_is_alpha and r_is_alpha == q_is_alpha:
                                 me = (
-                                    self._h2e_np[p_spatial, s_spatial, r_spatial, q_spatial]
-                                    - self._h2e_np[p_spatial, q_spatial, r_spatial, s_spatial]
+                                    self._h2e_np[
+                                        p_spatial, s_spatial, r_spatial, q_spatial
+                                    ]
+                                    - self._h2e_np[
+                                        p_spatial, q_spatial, r_spatial, s_spatial
+                                    ]
                                 )
                             else:
                                 continue
                         else:
                             if p_is_alpha == q_is_alpha and r_is_alpha == s_is_alpha:
-                                me = self._h2e_np[p_spatial, q_spatial, r_spatial, s_spatial]
+                                me = self._h2e_np[
+                                    p_spatial, q_spatial, r_spatial, s_spatial
+                                ]
                             elif p_is_alpha == s_is_alpha and r_is_alpha == q_is_alpha:
-                                me = self._h2e_np[p_spatial, s_spatial, r_spatial, q_spatial]
+                                me = self._h2e_np[
+                                    p_spatial, s_spatial, r_spatial, q_spatial
+                                ]
                             else:
                                 continue
 
                         if abs(me) < MATRIX_ELEMENT_TOL:
                             continue
 
-                        sign = self._jw_sign_double_py(config, p_spin, r_spin, q_spin, s_spin)
+                        sign = self._jw_sign_double_py(
+                            config, p_spin, r_spin, q_spin, s_spin
+                        )
                         new_cfg = config.copy()
                         new_cfg[q_spin] = 0
                         new_cfg[s_spin] = 0
@@ -503,7 +521,9 @@ class MolecularHamiltonian(Hamiltonian):
                 np.empty(0, dtype=np.float64),
             )
 
-        return np.array(all_configs, dtype=np.int64), np.array(all_elements, dtype=np.float64)
+        return np.array(all_configs, dtype=np.int64), np.array(
+            all_elements, dtype=np.float64
+        )
 
     @staticmethod
     def _jw_sign_single_py(config: np.ndarray, p: int, q: int) -> int:
@@ -529,9 +549,7 @@ class MolecularHamiltonian(Hamiltonian):
         return 1 - 2 * (count % 2)
 
     @staticmethod
-    def _jw_sign_double_py(
-        config: np.ndarray, p: int, r: int, q: int, s: int
-    ) -> int:
+    def _jw_sign_double_py(config: np.ndarray, p: int, r: int, q: int, s: int) -> int:
         """Pure-Python Jordan--Wigner sign for double excitation.
 
         Operator ordering: a†_p a†_r a_s a_q (right-to-left).
@@ -672,7 +690,9 @@ class MolecularHamiltonian(Hamiltonian):
         if diag_matched.any():
             matched_j = torch.where(diag_matched)[0]
             matched_i = bra_sort_perm.cpu()[diag_positions[diag_matched]]
-            h_matrix[matched_i.to(device), matched_j.to(device)] = diag_vals[matched_j.to(device)]
+            h_matrix[matched_i.to(device), matched_j.to(device)] = diag_vals[
+                matched_j.to(device)
+            ]
 
         # Pre-move kets to CPU once for Numba calls
         configs_ket_cpu = configs_ket.detach().cpu()
@@ -685,9 +705,9 @@ class MolecularHamiltonian(Hamiltonian):
 
             # Vectorised membership test via searchsorted
             conn_hashes = self._config_hash_batch(connected)  # (n_conn,)
-            positions = torch.searchsorted(
-                sorted_bra_hashes.cpu(), conn_hashes
-            ).clamp(max=m - 1)
+            positions = torch.searchsorted(sorted_bra_hashes.cpu(), conn_hashes).clamp(
+                max=m - 1
+            )
             matched_mask = sorted_bra_hashes.cpu()[positions] == conn_hashes
             if not matched_mask.any():
                 continue
@@ -705,9 +725,7 @@ class MolecularHamiltonian(Hamiltonian):
     # Fast symmetric matrix construction
     # ------------------------------------------------------------------
 
-    def matrix_elements_fast(
-        self, configs: torch.Tensor
-    ) -> torch.Tensor:
+    def matrix_elements_fast(self, configs: torch.Tensor) -> torch.Tensor:
         """Build a Hermitian projected Hamiltonian matrix efficiently.
 
         Builds only the lower triangle via hash-based matching then
@@ -738,16 +756,14 @@ class MolecularHamiltonian(Hamiltonian):
         n_configs = configs.shape[0]
 
         if n_configs > 10000:
-            mem_gb = n_configs ** 2 * 8 / 1e9
+            mem_gb = n_configs**2 * 8 / 1e9
             raise MemoryError(
                 f"matrix_elements_fast() refused {n_configs}x{n_configs} "
                 f"dense matrix ({mem_gb:.1f} GB). Use sparse methods for "
                 f"systems with >10000 configs."
             )
 
-        H = torch.zeros(
-            n_configs, n_configs, dtype=torch.float64, device=self.device
-        )
+        H = torch.zeros(n_configs, n_configs, dtype=torch.float64, device=self.device)
 
         # Vectorised diagonal (already GPU-optimised)
         H.diagonal().copy_(self.diagonal_elements_batch(configs))
@@ -769,9 +785,7 @@ class MolecularHamiltonian(Hamiltonian):
             conn_hashes = self._config_hash_batch(connected)  # (n_conn,) on CPU
 
             # Vectorised membership test via searchsorted on sorted hashes
-            positions = torch.searchsorted(
-                sorted_hashes.cpu(), conn_hashes
-            )
+            positions = torch.searchsorted(sorted_hashes.cpu(), conn_hashes)
             positions = positions.clamp(max=n_configs - 1)
 
             # Check which positions actually match
@@ -894,9 +908,7 @@ class MolecularHamiltonian(Hamiltonian):
             e_corr, _civec = cisolver.kernel(h1e_np, eri, norb, nelec)
             total_energy = float(e_corr) + self.E_nuc
 
-            logger.info(
-                "FCI energy (PySCF native): %.12f Ha", total_energy
-            )
+            logger.info("FCI energy (PySCF native): %.12f Ha", total_energy)
             return total_energy
 
         except ImportError:

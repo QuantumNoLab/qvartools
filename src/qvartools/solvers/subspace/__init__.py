@@ -1,4 +1,5 @@
 """subspace --- Subspace diagonalisation solvers."""
+
 from __future__ import annotations
 
 from qvartools.solvers.subspace.cipsi import CIPSISolver

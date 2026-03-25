@@ -125,9 +125,7 @@ class SQDSolver(Solver):
             merged.update(training_config)
         self.training_config: dict[str, Any] = merged
 
-    def solve(
-        self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]
-    ) -> SolverResult:
+    def solve(self, hamiltonian: Hamiltonian, mol_info: dict[str, Any]) -> SolverResult:
         """Run the SQD pipeline.
 
         Parameters
@@ -220,9 +218,7 @@ class SQDSolver(Solver):
             metadata=metadata,
         )
 
-    def _create_flow(
-        self, hamiltonian: Hamiltonian, n_qubits: int
-    ) -> torch.nn.Module:
+    def _create_flow(self, hamiltonian: Hamiltonian, n_qubits: int) -> torch.nn.Module:
         """Instantiate the normalizing flow.
 
         Parameters
@@ -237,9 +233,8 @@ class SQDSolver(Solver):
         torch.nn.Module
             The flow sampler instance.
         """
-        if (
-            self.flow_type == "particle_conserving"
-            and hasattr(hamiltonian, "integrals")
+        if self.flow_type == "particle_conserving" and hasattr(
+            hamiltonian, "integrals"
         ):
             from qvartools.flows import ParticleConservingFlowSampler
 

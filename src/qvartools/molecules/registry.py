@@ -67,8 +67,14 @@ import math as _math
 _H2O_GEOMETRY: list[tuple[str, tuple[float, float, float]]] = [
     ("O", (0.0, 0.0, 0.0)),
     ("H", (0.96, 0.0, 0.0)),
-    ("H", (0.96 * _math.cos(_math.radians(104.5)),
-           0.96 * _math.sin(_math.radians(104.5)), 0.0)),
+    (
+        "H",
+        (
+            0.96 * _math.cos(_math.radians(104.5)),
+            0.96 * _math.sin(_math.radians(104.5)),
+            0.0,
+        ),
+    ),
 ]
 
 _NH3_GEOMETRY: list[tuple[str, tuple[float, float, float]]] = [
@@ -553,9 +559,7 @@ def get_molecule(
     key = name.lower().strip()
     if key not in MOLECULE_REGISTRY:
         available = ", ".join(sorted(MOLECULE_REGISTRY.keys()))
-        raise KeyError(
-            f"Unknown molecule {name!r}. Available: {available}"
-        )
+        raise KeyError(f"Unknown molecule {name!r}. Available: {available}")
 
     entry = MOLECULE_REGISTRY[key]
     factory = entry["factory"]

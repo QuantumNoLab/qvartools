@@ -83,6 +83,22 @@ class TestGetExplicitCliArgs:
             explicit = _get_explicit_cli_args(parser)
         assert "device" in explicit
 
+    def test_store_const_flag_detected(self):
+        """--mode (store_const) is detected when explicitly provided."""
+        parser = create_base_parser("test")
+        parser.add_argument("--mode", action="store_const", const="fast")
+        with mock.patch("sys.argv", ["test", "--mode"]):
+            explicit = _get_explicit_cli_args(parser)
+        assert "mode" in explicit
+
+    def test_store_const_flag_not_detected_when_omitted(self):
+        """--mode (store_const) is NOT in explicit set when omitted."""
+        parser = create_base_parser("test")
+        parser.add_argument("--mode", action="store_const", const="fast")
+        with mock.patch("sys.argv", ["test"]):
+            explicit = _get_explicit_cli_args(parser)
+        assert "mode" not in explicit
+
     def test_positional_and_store_true_together(self):
         """Regression: both positional + store_true in same parser (issue #1)."""
         parser = create_base_parser("test")
@@ -105,11 +121,13 @@ class TestLoadConfig:
         assert config["device"] == "cpu"
 
     def test_defaults_used_when_no_cli(self):
-        """Built-in defaults apply when no CLI args are given."""
+        """All built-in defaults apply when no CLI args are given."""
         parser = create_base_parser("test")
         with mock.patch("sys.argv", ["test"]):
             args, config = load_config(parser)
         assert config["molecule"] == "h2"
+        assert config["device"] == "auto"
+        assert config["verbose"] is True
 
     def test_yaml_overrides_defaults(self, tmp_path):
         """YAML values override built-in defaults."""

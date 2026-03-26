@@ -139,7 +139,7 @@ class FlowGuidedKrylovPipeline:
 
         # Initialize components
         self.flow: torch.nn.Module
-        self.nqs: DenseNQS
+        self.nqs: torch.nn.Module
         self.reference_state: torch.Tensor
         self.trainer: PhysicsGuidedFlowTrainer | None = None
         self._essential_configs: torch.Tensor | None = None
@@ -366,7 +366,7 @@ class FlowGuidedKrylovPipeline:
     # Stage 1: Train flow + NQS (or generate Direct-CI basis)
     # ------------------------------------------------------------------
 
-    def train_flow_nqs(self, progress: bool = True) -> dict[str, list]:
+    def train_flow_nqs(self, progress: bool = True) -> dict[str, Any]:
         """Stage 1: Physics-guided joint training of the flow and NQS.
 
         If ``config.skip_nf_training`` is ``True``, generates essential

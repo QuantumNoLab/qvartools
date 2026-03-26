@@ -58,7 +58,7 @@ class TransformerAsNQS(NeuralQuantumState):
     """
 
     def __init__(self, transformer: nn.Module) -> None:
-        n_orb: int = transformer.n_orbitals  # type: ignore[attr-defined]
+        n_orb: int = transformer.n_orbitals  # type: ignore[attr-defined,assignment]
         num_sites = 2 * n_orb
         super().__init__(num_sites=num_sites, local_dim=2, complex_output=False)
 
@@ -86,7 +86,7 @@ class TransformerAsNQS(NeuralQuantumState):
         """
         alpha = x[:, : self._n_orb]
         beta = x[:, self._n_orb :]
-        log_p = self._transformer.log_prob(alpha, beta)  # type: ignore[attr-defined]
+        log_p = self._transformer.log_prob(alpha, beta)  # type: ignore[attr-defined,operator]
         return 0.5 * log_p
 
     def phase(self, x: torch.Tensor) -> torch.Tensor:
@@ -173,21 +173,21 @@ class NQSWithSampling(nn.Module):
                 f"configurations (max {self._MAX_ENUM_CONFIGS:,}). "
                 f"Use MCMC or flow-based sampling for large systems."
             )
-        alpha_configs = []
+        alpha_list: list[torch.Tensor] = []
         for occ in combinations(range(n), self.n_alpha):
             row = torch.zeros(n, dtype=torch.float32)
             for i in occ:
                 row[i] = 1.0
-            alpha_configs.append(row)
-        alpha_configs = torch.stack(alpha_configs)
+            alpha_list.append(row)
+        alpha_configs = torch.stack(alpha_list)
 
-        beta_configs = []
+        beta_list: list[torch.Tensor] = []
         for occ in combinations(range(n), self.n_beta):
             row = torch.zeros(n, dtype=torch.float32)
             for i in occ:
                 row[i] = 1.0
-            beta_configs.append(row)
-        beta_configs = torch.stack(beta_configs)
+            beta_list.append(row)
+        beta_configs = torch.stack(beta_list)
 
         n_a = alpha_configs.shape[0]
         n_b = beta_configs.shape[0]

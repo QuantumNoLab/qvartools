@@ -11,6 +11,11 @@ import sys
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
+# config_loader requires pyyaml, which lives in the "configs" extra
+pytest.importorskip("yaml")
+
 # Make experiments/ importable
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "experiments"))
 

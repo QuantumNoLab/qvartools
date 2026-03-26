@@ -179,8 +179,11 @@ def _get_explicit_cli_args(parser: argparse.ArgumentParser) -> set[str]:
 
         kwargs: dict[str, Any] = {"default": sentinel}
 
-        # Actions with nargs=0 (store_true, store_false, store_const, count)
+        # Actions with nargs=0 (store_true, store_false, store_const)
         # cannot pass nargs as a kwarg — preserve them via action= instead.
+        # Note: _CountAction also has nargs=0 but is incompatible with
+        # sentinel defaults (count does default + 1). Not handled here
+        # because no experiment script uses action="count".
         if isinstance(action, argparse._StoreTrueAction):  # noqa: SLF001
             kwargs["action"] = "store_true"
         elif isinstance(action, argparse._StoreFalseAction):  # noqa: SLF001
@@ -188,8 +191,6 @@ def _get_explicit_cli_args(parser: argparse.ArgumentParser) -> set[str]:
         elif isinstance(action, argparse._StoreConstAction):  # noqa: SLF001
             kwargs["action"] = "store_const"
             kwargs["const"] = action.const
-        elif isinstance(action, argparse._CountAction):  # noqa: SLF001
-            kwargs["action"] = "count"
         else:
             if action.nargs is not None:
                 kwargs["nargs"] = action.nargs

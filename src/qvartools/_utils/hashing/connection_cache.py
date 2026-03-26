@@ -90,6 +90,53 @@ class ConnectionCache:
         powers = self._get_powers(config.shape[0], config.device)
         return int((config.to(torch.int64) * powers).sum().item())
 
+    def hash_batch(self, configs: torch.Tensor) -> torch.Tensor:
+        """Hash a batch of configurations via a single matmul.
+
+        Parameters
+        ----------
+        configs : torch.Tensor
+            Binary configurations, shape ``(n_configs, n_sites)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Integer hashes, shape ``(n_configs,)``, dtype ``int64``.
+        """
+        n_sites = configs.shape[1]
+        powers = self._get_powers(n_sites, configs.device)
+        return (configs.to(torch.int64) * powers.unsqueeze(0)).sum(dim=1)
+
+    def get_batch(
+        self, configs: torch.Tensor
+    ) -> list[tuple[torch.Tensor, torch.Tensor] | None]:
+        """Look up cached connections for a batch of configurations.
+
+        Parameters
+        ----------
+        configs : torch.Tensor
+            Binary configurations, shape ``(n_configs, n_sites)``.
+
+        Returns
+        -------
+        list
+            One entry per config: ``(connected, elements)`` if cached,
+            ``None`` otherwise.  Cache hits are promoted to
+            most-recently-used.
+        """
+        hashes = self.hash_batch(configs)
+        results: list[tuple[torch.Tensor, torch.Tensor] | None] = []
+        for h in hashes.tolist():
+            key = int(h)
+            if key in self._cache:
+                self._hits += 1
+                self._touch(key)
+                results.append(self._cache[key])
+            else:
+                self._misses += 1
+                results.append(None)
+        return results
+
     def _touch(self, key: int) -> None:
         """Move *key* to the end of the dict (mark as most-recently-used)."""
         value = self._cache.pop(key)

@@ -224,3 +224,57 @@ class TestPowersCaching:
 
         cache.put(torch.tensor([0, 1, 0, 1]), dummy_conn, dummy_elem)
         assert id(cache._powers) == powers_id, "Powers tensor should be reused"
+
+
+class TestBatchEncoding:
+    """Tests for hash_batch and get_batch vectorized operations."""
+
+    def test_hash_batch_shape(self) -> None:
+        """hash_batch returns integer tensor of shape (n_configs,)."""
+        cache = ConnectionCache(max_size=10)
+        configs = torch.tensor([[1, 0, 1, 0], [0, 1, 0, 1], [1, 1, 0, 0]])
+        hashes = cache.hash_batch(configs)
+        assert hashes.shape == (3,)
+        assert hashes.dtype == torch.int64
+
+    def test_hash_batch_matches_individual(self) -> None:
+        """Batch hash matches per-config _hash for each row."""
+        cache = ConnectionCache(max_size=10)
+        configs = torch.tensor([[1, 0, 1, 0], [0, 1, 0, 1], [1, 1, 0, 0]])
+        batch_hashes = cache.hash_batch(configs)
+        for i in range(configs.shape[0]):
+            individual = cache._hash(configs[i])
+            assert batch_hashes[i].item() == individual
+
+    def test_hash_batch_unique_for_distinct_configs(self) -> None:
+        """Distinct binary configs produce distinct hashes."""
+        cache = ConnectionCache(max_size=10)
+        configs = torch.tensor([[0, 0, 1], [0, 1, 0], [1, 0, 0], [1, 1, 0]])
+        hashes = cache.hash_batch(configs)
+        assert len(set(hashes.tolist())) == 4
+
+    def test_get_batch_returns_cached_entries(self) -> None:
+        """get_batch returns results for configs that are in cache."""
+        cache = ConnectionCache(max_size=10)
+        configs = torch.tensor([[1, 0, 1, 0], [0, 1, 0, 1]])
+        conn_a = torch.tensor([[0, 1, 1, 0]])
+        elem_a = torch.tensor([0.5])
+        cache.put(configs[0], conn_a, elem_a)
+
+        results = cache.get_batch(configs)
+        # configs[0] should be found, configs[1] should be None
+        assert results[0] is not None
+        assert results[1] is None
+        assert torch.equal(results[0][0], conn_a)
+
+    def test_get_batch_all_cached(self) -> None:
+        """get_batch returns all entries when all are cached."""
+        cache = ConnectionCache(max_size=10)
+        dummy_conn = torch.tensor([[0, 0]])
+        dummy_elem = torch.tensor([1.0])
+        configs = torch.tensor([[1, 0], [0, 1]])
+        cache.put(configs[0], dummy_conn, dummy_elem)
+        cache.put(configs[1], dummy_conn, dummy_elem)
+
+        results = cache.get_batch(configs)
+        assert all(r is not None for r in results)

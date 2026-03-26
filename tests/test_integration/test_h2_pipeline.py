@@ -29,7 +29,7 @@ skip_no_pyscf = pytest.mark.skipif(not _HAS_PYSCF, reason="PySCF is not installe
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def h2_hamiltonian():
     """H2 molecule at 0.74 angstrom, sto-3g basis (4 qubits)."""
     if not _HAS_PYSCF:

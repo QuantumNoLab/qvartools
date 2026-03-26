@@ -25,7 +25,7 @@ skip_no_pyscf = pytest.mark.skipif(not _HAS_PYSCF, reason="PySCF is not installe
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def beh2_hamiltonian():
     """BeH2 molecule, sto-6g basis (14 qubits)."""
     if not _HAS_PYSCF:

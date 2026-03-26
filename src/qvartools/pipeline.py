@@ -883,8 +883,15 @@ class FlowGuidedKrylovPipeline:
         # Stage 1: Train flow + NQS (or generate essential configs)
         self.train_flow_nqs(progress=progress)
 
+        # Free GPU memory between stages (training tensors no longer needed)
+        from qvartools._utils.gpu import cleanup_gpu_memory
+
+        cleanup_gpu_memory()
+
         # Stage 2: Extract and select basis
         self.extract_and_select_basis()
+
+        cleanup_gpu_memory()
 
         # Stage 3: Subspace diagonalization
         self.run_subspace_diag(progress=progress)

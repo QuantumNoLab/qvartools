@@ -170,25 +170,33 @@ def _get_explicit_cli_args(parser: argparse.ArgumentParser) -> set[str]:
         if isinstance(action, argparse._HelpAction):  # noqa: SLF001
             continue
 
-        kwargs: dict[str, Any] = {
-            "default": sentinel,
-            "dest": action.dest,
-        }
-        # Preserve nargs so positional / optional handling stays correct
-        if action.nargs is not None:
-            kwargs["nargs"] = action.nargs
-        if action.type is not None:
-            kwargs["type"] = action.type
+        kwargs: dict[str, Any] = {"default": sentinel}
+
+        # Actions with nargs=0 (store_true, store_false, store_const, count)
+        # cannot pass nargs as a kwarg — preserve them via action= instead.
+        if isinstance(action, argparse._StoreTrueAction):  # noqa: SLF001
+            kwargs["action"] = "store_true"
+        elif isinstance(action, argparse._StoreFalseAction):  # noqa: SLF001
+            kwargs["action"] = "store_false"
+        elif isinstance(action, argparse._StoreConstAction):  # noqa: SLF001
+            kwargs["action"] = "store_const"
+            kwargs["const"] = action.const
+        elif isinstance(action, argparse._CountAction):  # noqa: SLF001
+            kwargs["action"] = "count"
+        else:
+            if action.nargs is not None:
+                kwargs["nargs"] = action.nargs
+            if action.type is not None:
+                kwargs["type"] = action.type
 
         if action.option_strings:
+            # Optional arg: dest must be explicit
+            kwargs["dest"] = action.dest
             probe.add_argument(*action.option_strings, **kwargs)
         else:
+            # Positional arg: dest is implied by the name, cannot be a kwarg
             probe.add_argument(action.dest, **kwargs)
 
     probe_ns, _ = probe.parse_known_args()
 
-    return {
-        key
-        for key, value in vars(probe_ns).items()
-        if value is not sentinel
-    }
+    return {key for key, value in vars(probe_ns).items() if value is not sentinel}

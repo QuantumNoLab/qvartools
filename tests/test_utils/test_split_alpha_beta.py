@@ -224,3 +224,29 @@ class TestEndToEndSplitAndProduct:
         expanded = cartesian_product_configs(alpha, beta)
         # 2 unique alpha × 2 unique beta = 4 >= 3 original
         assert expanded.shape[0] >= configs.shape[0]
+
+
+class TestCartesianProductValidation:
+    """Tests for input validation in cartesian_product_configs."""
+
+    def test_mismatched_n_orb_raises(self) -> None:
+        """alpha and beta with different column counts should raise."""
+        from qvartools._utils.formatting.bitstring_format import (
+            cartesian_product_configs,
+        )
+
+        alpha = torch.tensor([[1, 0]])
+        beta = torch.tensor([[1, 0, 0]])
+        with pytest.raises(ValueError, match="same n_orbitals"):
+            cartesian_product_configs(alpha, beta)
+
+    def test_non_2d_alpha_raises(self) -> None:
+        """1D alpha should raise."""
+        from qvartools._utils.formatting.bitstring_format import (
+            cartesian_product_configs,
+        )
+
+        alpha = torch.tensor([1, 0])
+        beta = torch.tensor([[1, 0]])
+        with pytest.raises(ValueError, match="2D"):
+            cartesian_product_configs(alpha, beta)

@@ -106,12 +106,22 @@ def cartesian_product_configs(
     numbers (e.g., ``sum(alpha_i) + sum(beta_j) != N_e``).  Callers
     should filter by particle number if the Hamiltonian requires it.
     """
+    if alpha.ndim != 2 or beta.ndim != 2:
+        raise ValueError(
+            f"alpha and beta must be 2D; got alpha.ndim={alpha.ndim}, beta.ndim={beta.ndim}"
+        )
+    if alpha.shape[1] != beta.shape[1]:
+        raise ValueError(
+            f"alpha and beta must have same n_orbitals; "
+            f"got alpha.shape[1]={alpha.shape[1]} vs beta.shape[1]={beta.shape[1]}"
+        )
+
     n_alpha = alpha.shape[0]
     n_beta = beta.shape[0]
+    n_orb = alpha.shape[1]
 
     if n_alpha == 0 or n_beta == 0:
         ref = alpha if n_alpha > 0 else beta
-        n_orb = ref.shape[1]
         return torch.zeros(0, 2 * n_orb, dtype=ref.dtype, device=ref.device)
 
     if alpha.device != beta.device or alpha.dtype != beta.dtype:

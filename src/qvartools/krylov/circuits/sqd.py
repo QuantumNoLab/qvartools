@@ -113,7 +113,7 @@ class SQDConfig:
 
     # Cartesian product expansion (Issue #14)
     use_cartesian_product: bool = True  # Expand subspace via alpha×beta product
-    max_cartesian_size: int = 5000  # Skip expansion if product exceeds this
+    max_cartesian_size: int = 1000  # Skip expansion if product exceeds this
 
 
 class SQDSolver:
@@ -740,9 +740,21 @@ class SQDSolver:
 
     @staticmethod
     def _batch_hash(batch: torch.Tensor) -> int:
-        """Compute a stable hash for a batch of configurations (for caching)."""
-        sorted_batch, _ = torch.sort(batch, dim=0)
-        return hash(sorted_batch.detach().cpu().numpy().tobytes())
+        """Compute a stable hash for a batch of configurations (for caching).
+
+        Sorts rows lexicographically (not per-column) to ensure unique
+        hash per unique set of configurations.
+        """
+        batch_cpu = batch.detach().cpu()
+        # Convert each row to an integer for lexicographic sort
+        n_sites = batch_cpu.shape[1]
+        powers = torch.tensor(
+            [1 << k for k in range(n_sites - 1, -1, -1)], dtype=torch.int64
+        )
+        row_keys = (batch_cpu.to(torch.int64) * powers).sum(dim=1)
+        order = torch.argsort(row_keys)
+        sorted_batch = batch_cpu[order]
+        return hash(sorted_batch.numpy().tobytes())
 
     def _diagonalize_batch(
         self, batch: torch.Tensor, batch_index: int

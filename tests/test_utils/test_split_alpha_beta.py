@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 import torch
 
 
@@ -71,6 +72,22 @@ class TestSplitSpinStrings:
         alpha, beta = split_spin_strings(configs, n_orbitals=2)
         assert alpha.device == configs.device
         assert beta.device == configs.device
+
+    def test_odd_columns_raises(self) -> None:
+        """Odd column count without explicit n_orbitals should raise."""
+        from qvartools._utils.formatting.bitstring_format import split_spin_strings
+
+        configs = torch.tensor([[1, 0, 1]])  # 3 columns
+        with pytest.raises(ValueError, match="odd column count"):
+            split_spin_strings(configs)
+
+    def test_mismatched_n_orbitals_raises(self) -> None:
+        """n_orbitals inconsistent with column count should raise."""
+        from qvartools._utils.formatting.bitstring_format import split_spin_strings
+
+        configs = torch.tensor([[1, 0, 1, 0]])  # 4 columns
+        with pytest.raises(ValueError, match="expected"):
+            split_spin_strings(configs, n_orbitals=3)  # 2*3=6 != 4
 
 
 class TestCartesianProductConfigs:

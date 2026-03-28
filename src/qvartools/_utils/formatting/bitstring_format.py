@@ -47,8 +47,21 @@ def split_spin_strings(
     unique_beta : torch.Tensor
         Unique beta occupation strings, shape ``(n_beta, n_orbitals)``.
     """
+    if configs.ndim != 2:
+        raise ValueError(f"configs must be 2D, got {configs.ndim}D")
+
     if n_orbitals is None:
+        if configs.shape[1] % 2 != 0:
+            raise ValueError(
+                f"configs has odd column count ({configs.shape[1]}); "
+                f"cannot infer n_orbitals. Pass n_orbitals explicitly."
+            )
         n_orbitals = configs.shape[1] // 2
+    elif configs.shape[1] != 2 * n_orbitals:
+        raise ValueError(
+            f"configs has {configs.shape[1]} columns, expected "
+            f"2 * n_orbitals = {2 * n_orbitals}"
+        )
 
     if configs.shape[0] == 0:
         empty_a = configs[:, :n_orbitals]
@@ -97,8 +110,15 @@ def cartesian_product_configs(
     n_beta = beta.shape[0]
 
     if n_alpha == 0 or n_beta == 0:
-        n_orb = alpha.shape[1] if alpha.shape[0] > 0 else beta.shape[1]
-        return torch.zeros(0, 2 * n_orb, dtype=alpha.dtype, device=alpha.device)
+        ref = alpha if n_alpha > 0 else beta
+        n_orb = ref.shape[1]
+        return torch.zeros(0, 2 * n_orb, dtype=ref.dtype, device=ref.device)
+
+    if alpha.device != beta.device or alpha.dtype != beta.dtype:
+        raise ValueError(
+            f"alpha and beta must have same dtype and device; got "
+            f"alpha({alpha.dtype}, {alpha.device}) vs beta({beta.dtype}, {beta.device})"
+        )
 
     # alpha_i repeated for each beta_j
     alpha_expanded = alpha.repeat_interleave(n_beta, dim=0)

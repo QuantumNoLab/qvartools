@@ -141,3 +141,69 @@ class TestCartesianProductConfigs:
         beta = torch.tensor([[0, 1]])
         result = cartesian_product_configs(alpha, beta)
         assert result.device == alpha.device
+
+    def test_may_produce_invalid_particle_count(self) -> None:
+        """Cartesian product can produce configs with wrong particle count.
+
+        Callers must filter by particle number if required.
+        """
+        from qvartools._utils.formatting.bitstring_format import (
+            cartesian_product_configs,
+        )
+
+        # alpha with 1 electron, alpha with 2 electrons
+        alpha = torch.tensor([[1, 0, 0], [1, 1, 0]])
+        # beta with 1 electron
+        beta = torch.tensor([[1, 0, 0]])
+        result = cartesian_product_configs(alpha, beta)
+        # [1,0,0, 1,0,0] → 2 electrons total
+        # [1,1,0, 1,0,0] → 3 electrons total  ← different!
+        electron_counts = result.sum(dim=1)
+        assert not torch.all(electron_counts == electron_counts[0]), (
+            "Cartesian product should produce configs with different particle counts"
+        )
+
+
+class TestEndToEndSplitAndProduct:
+    """Integration: split → product → filter gives correct subspace."""
+
+    def test_roundtrip_preserves_originals(self) -> None:
+        """Original configs should be a subset of the Cartesian product."""
+        from qvartools._utils.formatting.bitstring_format import (
+            cartesian_product_configs,
+            split_spin_strings,
+        )
+
+        configs = torch.tensor(
+            [
+                [1, 0, 1, 0],
+                [1, 0, 0, 1],
+                [0, 1, 1, 0],
+            ]
+        )
+        alpha, beta = split_spin_strings(configs, n_orbitals=2)
+        expanded = cartesian_product_configs(alpha, beta)
+
+        # Every original config should appear in the expanded set
+        for i in range(configs.shape[0]):
+            found = (expanded == configs[i]).all(dim=1).any()
+            assert found, f"Original config {i} not found in Cartesian product"
+
+    def test_expansion_is_larger(self) -> None:
+        """Cartesian product should be >= original when there are shared strings."""
+        from qvartools._utils.formatting.bitstring_format import (
+            cartesian_product_configs,
+            split_spin_strings,
+        )
+
+        configs = torch.tensor(
+            [
+                [1, 0, 1, 0],
+                [1, 0, 0, 1],
+                [0, 1, 1, 0],
+            ]
+        )
+        alpha, beta = split_spin_strings(configs, n_orbitals=2)
+        expanded = cartesian_product_configs(alpha, beta)
+        # 2 unique alpha × 2 unique beta = 4 >= 3 original
+        assert expanded.shape[0] >= configs.shape[0]

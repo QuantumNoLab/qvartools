@@ -86,6 +86,12 @@ def cartesian_product_configs(
     torch.Tensor
         Cartesian product configurations, shape
         ``(n_alpha * n_beta, 2 * n_orbitals)``.
+
+    Notes
+    -----
+    The output may contain configurations with incorrect particle
+    numbers (e.g., ``sum(alpha_i) + sum(beta_j) != N_e``).  Callers
+    should filter by particle number if the Hamiltonian requires it.
     """
     n_alpha = alpha.shape[0]
     n_beta = beta.shape[0]

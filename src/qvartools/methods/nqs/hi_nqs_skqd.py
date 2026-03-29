@@ -200,6 +200,8 @@ def run_hi_nqs_skqd(
     hamiltonian: Any,
     mol_info: dict[str, Any],
     config: HINQSSKQDConfig | None = None,
+    *,
+    initial_basis: torch.Tensor | None = None,
 ) -> SolverResult:
     """Execute the HI+NQS+SKQD pipeline.
 
@@ -213,6 +215,10 @@ def run_hi_nqs_skqd(
         ``"n_alpha"``, ``"n_beta"``, ``"n_qubits"``.
     config : HINQSSKQDConfig or None
         Pipeline configuration.
+    initial_basis : torch.Tensor or None, optional
+        Pre-computed configurations to seed the cumulative basis
+        (e.g., from NF+DCI Stage 1-2).  Shape ``(n_configs, n_qubits)``.
+        If ``None`` (default), starts from an empty basis.
 
     Returns
     -------
@@ -261,8 +267,15 @@ def run_hi_nqs_skqd(
     occ_alpha = np.full(n_orb, n_alpha / n_orb)
     occ_beta = np.full(n_orb, n_beta / n_orb)
 
-    # --- Cumulative basis ---
-    cumulative_basis = torch.zeros(0, n_qubits, dtype=torch.long, device=device)
+    # --- Cumulative basis (warm-start from initial_basis if provided) ---
+    if initial_basis is not None:
+        cumulative_basis = initial_basis.to(dtype=torch.long, device=device)
+        cumulative_basis = torch.unique(cumulative_basis, dim=0)
+        logger.info(
+            "Warm-starting with %d initial basis configs", cumulative_basis.shape[0]
+        )
+    else:
+        cumulative_basis = torch.zeros(0, n_qubits, dtype=torch.long, device=device)
 
     energy_history: list[float] = []
     basis_size_history: list[int] = []

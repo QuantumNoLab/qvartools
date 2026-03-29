@@ -195,6 +195,8 @@ def run_hi_nqs_sqd(
     hamiltonian: Any,
     mol_info: dict[str, Any],
     config: HINQSSQDConfig | None = None,
+    *,
+    initial_basis: torch.Tensor | None = None,
 ) -> SolverResult:
     """Execute the HI+NQS+SQD pipeline.
 
@@ -207,6 +209,10 @@ def run_hi_nqs_sqd(
         ``"n_alpha"``, ``"n_beta"``, ``"n_qubits"``.
     config : HINQSSQDConfig or None
         Pipeline configuration.
+    initial_basis : torch.Tensor or None, optional
+        Pre-computed configurations to seed the cumulative basis
+        (e.g., from NF+DCI Stage 1-2).  Shape ``(n_configs, n_qubits)``.
+        If ``None`` (default), starts from an empty basis.
 
     Returns
     -------
@@ -255,8 +261,15 @@ def run_hi_nqs_sqd(
     occ_alpha = np.full(n_orb, n_alpha / n_orb)
     occ_beta = np.full(n_orb, n_beta / n_orb)
 
-    # --- Cumulative basis ---
-    cumulative_basis = torch.zeros(0, n_qubits, dtype=torch.long, device=device)
+    # --- Cumulative basis (warm-start from initial_basis if provided) ---
+    if initial_basis is not None:
+        cumulative_basis = initial_basis.to(dtype=torch.long, device=device)
+        cumulative_basis = torch.unique(cumulative_basis, dim=0)
+        logger.info(
+            "Warm-starting with %d initial basis configs", cumulative_basis.shape[0]
+        )
+    else:
+        cumulative_basis = torch.zeros(0, n_qubits, dtype=torch.long, device=device)
 
     energy_history: list[float] = []
     best_energy = float("inf")
@@ -271,10 +284,12 @@ def run_hi_nqs_sqd(
                 cfg.n_samples_per_iter, temperature=cfg.temperature
             ).to(device)
 
-        # Deduplicate against cumulative basis (cpu for numpy compat)
+        # Deduplicate against cumulative basis (numpy for vectorized_dedup)
         if cumulative_basis.shape[0] > 0:
-            deduped_np = vectorized_dedup(cumulative_basis.cpu(), new_configs.cpu())
-            unique_new = torch.from_numpy(deduped_np).to(device)
+            cb_np = cumulative_basis.cpu().numpy()
+            nc_np = new_configs.cpu().numpy()
+            deduped_np = vectorized_dedup(cb_np, nc_np)
+            unique_new = torch.from_numpy(deduped_np).long().to(device)
         else:
             unique_new = torch.unique(new_configs, dim=0)
 

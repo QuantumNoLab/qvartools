@@ -184,7 +184,9 @@ def main() -> None:
         krylov_n_ref=config.get("krylov_n_ref", 5),
         device=device,
     )
-    nqs_result = run_hi_nqs_skqd(hamiltonian, mol_info, config=skqd_config)
+    nqs_result = run_hi_nqs_skqd(
+        hamiltonian, mol_info, config=skqd_config, initial_basis=basis
+    )
 
     wall_time = time.perf_counter() - t_start
 

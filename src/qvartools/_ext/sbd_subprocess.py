@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 import tempfile
 
@@ -28,21 +29,25 @@ logger = logging.getLogger(__name__)
 def _find_sbd_binary() -> str | None:
     """Find the sbd diag binary."""
     env_binary = os.environ.get("QVARTOOLS_SBD_BINARY", "")
-    if env_binary and os.path.isfile(env_binary):
+    if env_binary and os.path.isfile(env_binary) and os.access(env_binary, os.X_OK):
         return env_binary
-    # Common locations
     for path in [
         "/tmp/sbd/apps/chemistry_tpb_selected_basis_diagonalization/diag",
         os.path.expanduser("~/.local/bin/sbd-diag"),
     ]:
-        if os.path.isfile(path):
+        if os.path.isfile(path) and os.access(path, os.X_OK):
             return path
     return None
 
 
+def _find_mpirun() -> str | None:
+    """Find mpirun executable."""
+    return shutil.which("mpirun")
+
+
 def sbd_available() -> bool:
-    """Check if sbd binary is available."""
-    return _find_sbd_binary() is not None
+    """Check if sbd binary and mpirun are both available."""
+    return _find_sbd_binary() is not None and _find_mpirun() is not None
 
 
 def _write_fcidump(
@@ -52,10 +57,11 @@ def _write_fcidump(
     n_orb: int,
     n_elec: int,
     nuclear_repulsion: float,
+    ms2: int = 0,
 ) -> None:
     """Write molecular integrals in FCIDUMP format."""
     with open(path, "w") as f:
-        f.write(f" &FCI NORB={n_orb:3d},NELEC={n_elec},MS2=0,\n")
+        f.write(f" &FCI NORB={n_orb:3d},NELEC={n_elec},MS2={ms2},\n")
         f.write("  ORBSYM=" + ",".join(["1"] * n_orb) + ",\n")
         f.write("  ISYM=1,\n")
         f.write(" &END\n")
@@ -79,9 +85,10 @@ def _write_fcidump(
 
 def _write_bitstrings(path: str, strings: torch.Tensor) -> None:
     """Write occupation strings as bitstring file (right-to-left ordering)."""
+    arr = strings.detach().cpu().numpy()
     with open(path, "w") as f:
-        for row in strings:
-            bits = "".join(str(int(b)) for b in reversed(row.tolist()))
+        for row in arr:
+            bits = "".join(str(int(b)) for b in row[::-1])
             f.write(bits + "\n")
 
 
@@ -93,7 +100,8 @@ def sbd_diagonalize(
     nuclear_repulsion: float,
     alpha_strings: torch.Tensor,
     beta_strings: torch.Tensor,
-    n_states: int = 1,
+    *,
+    ms2: int = 0,
     tolerance: float = 1e-8,
     max_iterations: int = 50,
     n_threads: int = 4,
@@ -116,13 +124,13 @@ def sbd_diagonalize(
         Unique alpha occupation strings, shape ``(n_alpha, n_orb)``.
     beta_strings : torch.Tensor
         Unique beta occupation strings, shape ``(n_beta, n_orb)``.
-    n_states : int
-        Number of eigenstates to compute.
-    tolerance : float
+    ms2 : int, optional
+        Twice the spin projection (default ``0`` for singlet).
+    tolerance : float, optional
         Davidson convergence tolerance.
-    max_iterations : int
+    max_iterations : int, optional
         Maximum Davidson iterations.
-    n_threads : int
+    n_threads : int, optional
         OpenMP threads.
 
     Returns
@@ -136,17 +144,22 @@ def sbd_diagonalize(
             "sbd binary not found. Set QVARTOOLS_SBD_BINARY env var "
             "or compile from https://github.com/r-ccs-cms/sbd"
         )
+    mpirun = _find_mpirun()
+    if mpirun is None:
+        raise RuntimeError("mpirun not found in PATH. Install OpenMPI.")
 
     with tempfile.TemporaryDirectory(prefix="qvartools_sbd_") as tmpdir:
         fcidump_path = os.path.join(tmpdir, "fcidump.txt")
         alpha_path = os.path.join(tmpdir, "alpha.txt")
         beta_path = os.path.join(tmpdir, "beta.txt")
 
-        _write_fcidump(fcidump_path, h1e, h2e, n_orb, n_elec, nuclear_repulsion)
+        _write_fcidump(
+            fcidump_path, h1e, h2e, n_orb, n_elec, nuclear_repulsion, ms2=ms2
+        )
         _write_bitstrings(alpha_path, alpha_strings)
         _write_bitstrings(beta_path, beta_strings)
 
-        cmd = ["mpirun"]
+        cmd = [mpirun]
         if os.getuid() == 0:
             cmd.append("--allow-run-as-root")
         cmd += [
@@ -173,8 +186,6 @@ def sbd_diagonalize(
             "0",
             "--rdm",
             "0",
-            "--nstate",
-            str(n_states),
         ]
 
         logger.debug("sbd command: %s", " ".join(cmd))
@@ -186,14 +197,12 @@ def sbd_diagonalize(
                 f"sbd failed (exit {result.returncode}): {result.stderr[:500]}"
             )
 
-        # Parse energy from stdout — match the final summary line
-        # "Sample-based diagonalization: Energy = -7.882..." or " Energy = -7.882..."
+        # Parse the LAST "Energy =" line (final result, not intermediate)
         energy = None
         for line in result.stdout.splitlines():
             if "Energy =" in line:
                 energy_str = line.split("Energy =")[1].strip()
                 energy = float(energy_str)
-        # Return the LAST "Energy =" line (final result, not intermediate)
         if energy is not None:
             return energy
 

@@ -615,7 +615,7 @@ def get_molecule_info(name: str) -> dict[str, Any]:
         available = ", ".join(sorted(MOLECULE_REGISTRY.keys()))
         raise KeyError(f"Unknown molecule {name!r}. Available: {available}")
 
-    return dict(_MOLECULE_INFO_REGISTRY[key])
+    return _MOLECULE_INFO_REGISTRY[key]
 
 
 def list_molecules() -> list[str]:

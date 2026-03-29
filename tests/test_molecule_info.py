@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from qvartools.molecules.registry import (
     MOLECULE_REGISTRY,
     get_molecule_info,
@@ -21,12 +23,8 @@ def test_get_molecule_info_is_case_insensitive() -> None:
 
 
 def test_get_molecule_info_unknown_raises_keyerror() -> None:
-    try:
+    with pytest.raises(KeyError, match="Unknown molecule"):
         get_molecule_info("not-a-molecule")
-    except KeyError:
-        pass
-    else:
-        raise AssertionError("Expected KeyError for unknown molecule name")
 
 
 def test_get_molecule_info_does_not_call_factory(monkeypatch) -> None:

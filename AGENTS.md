@@ -259,19 +259,23 @@ qvartools/
 │   ├── molecules/                # Molecular system registry
 │   │   └── registry.py           # MOLECULE_REGISTRY (12 molecules), get_molecule, list_molecules
 │   │
+│   ├── _ext/                     # Experimental GPU extensions
+│   │   ├── sbd_subprocess.py     # sbd_diagonalize, sbd_available (ADR-003 Phase 1)
+│   │   └── cudaq_vqe.py          # run_cudaq_vqe (CUDA-QX VQE + ADAPT-VQE wrapper)
+│   │
 │   ├── methods/                  # End-to-end method pipelines
 │   │   └── nqs/
 │   │       ├── nqs_sqd.py        # NQSSQDConfig, run_nqs_sqd
 │   │       ├── nqs_skqd.py       # NQSSKQDConfig, run_nqs_skqd
-│   │       ├── hi_nqs_sqd.py     # HINQSSQDConfig, run_hi_nqs_sqd (iterative with feedback)
-│   │       └── hi_nqs_skqd.py    # HINQSSKQDConfig, run_hi_nqs_skqd (iterative with feedback)
+│   │       ├── hi_nqs_sqd.py     # HINQSSQDConfig, run_hi_nqs_sqd (initial_basis warm-start)
+│   │       └── hi_nqs_skqd.py    # HINQSSKQDConfig, run_hi_nqs_skqd (initial_basis warm-start)
 │   │
 │   └── _utils/                   # Internal utilities
 │       ├── scaling/
 │       │   ├── quality_presets.py   # QualityPreset, SystemTier, SystemMetrics, ScaledParameters
 │       │   └── system_scaler.py     # SystemScaler (auto-adapt parameters to system size)
 │       ├── formatting/
-│       │   └── bitstring_format.py  # configs_to_ibm_format, ibm_format_to_configs, vectorized_dedup, hash_config
+│       │   └── bitstring_format.py  # configs_to_ibm_format, ibm_format_to_configs, vectorized_dedup, hash_config, split_spin_strings, cartesian_product_configs
 │       ├── hashing/
 │       │   ├── config_hash.py       # ConfigHash, config_integer_hash (overflow-safe)
 │       │   └── connection_cache.py  # ConnectionCache (LRU, stats tracking)
@@ -303,6 +307,8 @@ qvartools/
 │   │   └── test_diversity.py     # DiversitySelector, excitation_rank, hamming_distance
 │   ├── test_solvers/
 │   │   └── test_base.py          # Solver ABC, SolverResult
+│   ├── test_methods/
+│   │   └── test_initial_basis.py     # initial_basis warm-start contract + dedup tests
 │   ├── test_utils/
 │   │   ├── test_format_utils.py      # hash_config, vectorized_dedup
 │   │   ├── test_connection_cache.py  # ConnectionCache

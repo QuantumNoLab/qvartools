@@ -70,9 +70,17 @@ def run_cudaq_vqe(
     Returns
     -------
     dict
-        Keys: ``energy``, ``fci_energy``, ``hf_energy``, ``error_mha``,
-        ``wall_time``, ``n_params``, ``iterations``, ``method``,
-        ``n_qubits``, ``n_electrons``.
+        ``energy`` : float — final VQE/ADAPT-VQE energy (Ha).
+        ``fci_energy`` : float or None — CASCI FCI reference.
+        ``hf_energy`` : float or None — Hartree-Fock reference.
+        ``error_mha`` : float or None — error vs FCI (mHa).
+        ``wall_time`` : float — wall-clock time (s).
+        ``n_params`` : int — number of optimized parameters.
+        ``iterations`` : int — optimizer iterations.
+        ``method`` : str — ``"vqe"`` or ``"adapt-vqe"``.
+        ``n_qubits`` : int — problem qubit count.
+        ``n_electrons`` : int — active-space electron count.
+        ``optimal_parameters`` : list[float] — optimal variational params.
 
     Raises
     ------
@@ -96,7 +104,8 @@ def run_cudaq_vqe(
     try:
         cudaq.set_target(target)
     except RuntimeError:
-        logger.warning("Failed to set target '%s', falling back to qpp-cpu", target)
+        if verbose:
+            logger.warning("Failed to set target '%s', falling back to qpp-cpu", target)
         cudaq.set_target("qpp-cpu")
 
     molecule = solvers.create_molecule(

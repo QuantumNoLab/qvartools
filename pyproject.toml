@@ -62,7 +62,7 @@ docs = [
     "sphinx>=7.0",
     "sphinx-rtd-theme>=2.0",
 ]
-cudaq = ["cudaq>=0.14"]
+cudaq = ["cudaq>=0.13", "cudaq-solvers>=0.5"]
 full = ["pyscf>=2.4", "numba>=0.57"]
 dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.4"]
 

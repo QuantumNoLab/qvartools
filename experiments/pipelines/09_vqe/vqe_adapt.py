@@ -43,8 +43,7 @@ def main() -> None:
     parser.add_argument("--verbose", action="store_true", default=None)
     _, config = load_config(parser)
 
-    hamiltonian, mol_info = get_molecule(config.get("molecule", "h2"))
-    _ = hamiltonian
+    _, mol_info = get_molecule(config.get("molecule", "h2"))
 
     result = run_cudaq_vqe(
         geometry=mol_info["geometry"],

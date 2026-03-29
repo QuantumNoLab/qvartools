@@ -4,4 +4,3 @@ molecule: h2
 optimizer: cobyla
 max_iterations: 200
 target: nvidia
-device: auto

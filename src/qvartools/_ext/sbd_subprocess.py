@@ -204,11 +204,17 @@ def sbd_diagonalize(
             )
 
         # Parse the LAST "Energy =" line (final result, not intermediate)
+        # Take only the first token after "Energy =" to tolerate units/extra text
         energy = None
         for line in result.stdout.splitlines():
             if "Energy =" in line:
-                energy_str = line.split("Energy =")[1].strip()
-                energy = float(energy_str)
+                field = line.split("Energy =", 1)[1].strip()
+                if not field:
+                    continue
+                try:
+                    energy = float(field.split()[0])
+                except ValueError:
+                    continue
         if energy is not None:
             return energy
 

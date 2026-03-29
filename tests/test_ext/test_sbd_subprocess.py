@@ -18,6 +18,7 @@ class TestSbdSubprocess:
         # May be True or False depending on environment
         assert isinstance(sbd_available(), bool)
 
+    @pytest.mark.slow
     @pytest.mark.skipif(
         not __import__(
             "qvartools._ext.sbd_subprocess", fromlist=["sbd_available"]

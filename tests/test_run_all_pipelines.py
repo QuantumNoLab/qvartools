@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-import sys
+import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PIPELINES_DIR = ROOT / "experiments" / "pipelines"
-sys.path.insert(0, str(PIPELINES_DIR))
 
-import run_all_pipelines as rap
+# Load run_all_pipelines without mutating sys.path
+_spec = importlib.util.spec_from_file_location(
+    "run_all_pipelines", PIPELINES_DIR / "run_all_pipelines.py"
+)
+rap = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(rap)
 
 
 def test_vqe_pipelines_are_registered() -> None:

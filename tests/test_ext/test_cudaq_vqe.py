@@ -12,6 +12,7 @@ H2_GEOMETRY = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]
 _TEST_TARGET = "qpp-cpu"
 
 
+@pytest.mark.slow
 class TestCudaqVQE:
     """Tests for run_cudaq_vqe."""
 

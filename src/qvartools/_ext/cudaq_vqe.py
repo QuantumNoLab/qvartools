@@ -116,6 +116,12 @@ def run_cudaq_vqe(
     if method not in _VALID_METHODS:
         raise ValueError(f"method must be one of {_VALID_METHODS}, got {method!r}")
 
+    if (nele_cas is None) != (norb_cas is None):
+        raise ValueError(
+            "nele_cas and norb_cas must both be set or both be None; "
+            f"got nele_cas={nele_cas}, norb_cas={norb_cas}"
+        )
+
     # Enable gate fusion before any cudaq import/kernel compilation
     if gate_fusion > 0:
         os.environ["CUDAQ_FUSION_MAX_QUBITS"] = str(gate_fusion)

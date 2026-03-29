@@ -620,15 +620,20 @@ def get_molecule_info(name: str) -> dict[str, Any]:
             f"Molecule {name!r} is in MOLECULE_REGISTRY but missing from "
             f"_MOLECULE_INFO_REGISTRY. Both registries must be kept in sync."
         )
-    return _MOLECULE_INFO_REGISTRY[key]
+    # Return a copy to prevent callers from mutating global state
+    info = dict(_MOLECULE_INFO_REGISTRY[key])
+    if "geometry" in info:
+        info["geometry"] = list(info["geometry"])
+    return info
 
 
-# Validate registry consistency at import time
-assert set(MOLECULE_REGISTRY.keys()) == set(_MOLECULE_INFO_REGISTRY.keys()), (
-    "MOLECULE_REGISTRY and _MOLECULE_INFO_REGISTRY are out of sync: "
-    f"missing in info: {set(MOLECULE_REGISTRY) - set(_MOLECULE_INFO_REGISTRY)}, "
-    f"extra in info: {set(_MOLECULE_INFO_REGISTRY) - set(MOLECULE_REGISTRY)}"
-)
+# Validate registry consistency at import time (survives python -O)
+if set(MOLECULE_REGISTRY.keys()) != set(_MOLECULE_INFO_REGISTRY.keys()):
+    raise RuntimeError(
+        "MOLECULE_REGISTRY and _MOLECULE_INFO_REGISTRY are out of sync: "
+        f"missing in info: {set(MOLECULE_REGISTRY) - set(_MOLECULE_INFO_REGISTRY)}, "
+        f"extra in info: {set(_MOLECULE_INFO_REGISTRY) - set(MOLECULE_REGISTRY)}"
+    )
 
 
 def list_molecules() -> list[str]:

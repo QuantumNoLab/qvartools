@@ -36,4 +36,4 @@ def test_get_molecule_info_does_not_call_factory(monkeypatch) -> None:
     monkeypatch.setitem(MOLECULE_REGISTRY["h2"], "factory", _boom)
     info = get_molecule_info("h2")
     assert info["name"] == "H2"
-    monkeypatch.setitem(MOLECULE_REGISTRY["h2"], "factory", original_factory)
+    # monkeypatch auto-restores at teardown — no manual restore needed

@@ -22,17 +22,9 @@ import torch
 class TestDenseLimitRaised:
     """Verify ``matrix_elements_fast`` now allows up to 50K configs."""
 
-    def test_50001_raises_memory_error(self):
+    def test_50001_raises_memory_error(self, h2_hamiltonian):
         """matrix_elements_fast should raise MemoryError at 50001+ configs."""
-        pyscf = pytest.importorskip("pyscf")  # noqa: F841
-        from qvartools.hamiltonians import (
-            MolecularHamiltonian,
-            compute_molecular_integrals,
-        )
-
-        geometry = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]
-        integrals = compute_molecular_integrals(geometry, basis="sto-3g")
-        ham = MolecularHamiltonian(integrals)
+        ham = h2_hamiltonian
 
         # Create a fake (50001, num_sites) tensor — values don't matter,
         # the guard fires before any computation.
@@ -40,17 +32,9 @@ class TestDenseLimitRaised:
         with pytest.raises(MemoryError, match="50000"):
             ham.matrix_elements_fast(fake_configs)
 
-    def test_small_basis_does_not_raise(self):
+    def test_small_basis_does_not_raise(self, h2_hamiltonian):
         """matrix_elements_fast should succeed for a valid small basis."""
-        pyscf = pytest.importorskip("pyscf")  # noqa: F841
-        from qvartools.hamiltonians import (
-            MolecularHamiltonian,
-            compute_molecular_integrals,
-        )
-
-        geometry = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))]
-        integrals = compute_molecular_integrals(geometry, basis="sto-3g")
-        ham = MolecularHamiltonian(integrals)
+        ham = h2_hamiltonian
 
         # Use all valid H2 configs (36 for sto-3g) — well under 50K limit.
         configs = ham._generate_all_configs()

@@ -161,9 +161,9 @@ class MolecularHamiltonian(Hamiltonian):
 
         # Integer hashing helpers
         # _use_split_hash is only needed for >=64 spin-orbitals (32+ spatial
-        # orbitals) to avoid int64 overflow.  Our CAS systems max out at 58
-        # spin-orbitals (Cr2-CAS(12,29), 58 qubits), so in practice this
-        # path is never triggered by the molecule registry.
+        # orbitals) to avoid int64 overflow.  All current molecules in the
+        # registry use fewer than 64 spin-orbitals, so in practice this path
+        # is not exercised by the molecule registry.
         self._use_split_hash = num_sites >= 64
 
         logger.info(

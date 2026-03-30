@@ -826,6 +826,55 @@ _MOLECULE_INFO_REGISTRY: dict[str, dict[str, Any]] = {
     "hcn": _build_info("HCN", 22, "sto-3g", _HCN_GEOMETRY, 0, 0),
     "c2h2": _build_info("C2H2", 24, "sto-3g", _C2H2_GEOMETRY, 0, 0),
     "h2s": _build_info("H2S", 26, "sto-3g", _H2S_GEOMETRY, 0, 0),
+    # --- CAS active-space systems ---
+    "n2-cas(10,12)": {
+        **_build_info("N2-CAS(10,12)", 24, "cc-pvdz", list(_N2_CAS_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
+    "cr2": {
+        **_build_info("Cr2", 24, "sto-3g", list(_CR2_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
+    "n2-cas(10,15)": {
+        **_build_info("N2-CAS(10,15)", 30, "cc-pvdz", list(_N2_CAS_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
+    "benzene": {
+        **_build_info("Benzene", 30, "sto-3g", _benzene_geometry(), 0, 0),
+        "is_cas": True,
+    },
+    "n2-cas(10,17)": {
+        **_build_info("N2-CAS(10,17)", 34, "cc-pvdz", list(_N2_CAS_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
+    "cr2-cas(12,18)": {
+        **_build_info("Cr2-CAS(12,18)", 36, "cc-pvdz", list(_CR2_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
+    "n2-cas(10,20)": {
+        **_build_info("N2-CAS(10,20)", 40, "cc-pvtz", list(_N2_CAS_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
+    "cr2-cas(12,20)": {
+        **_build_info("Cr2-CAS(12,20)", 40, "cc-pvdz", list(_CR2_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
+    "n2-cas(10,26)": {
+        **_build_info("N2-CAS(10,26)", 52, "cc-pvtz", list(_N2_CAS_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
+    "cr2-cas(12,26)": {
+        **_build_info("Cr2-CAS(12,26)", 52, "cc-pvdz", list(_CR2_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
+    "cr2-cas(12,28)": {
+        **_build_info("Cr2-CAS(12,28)", 56, "cc-pvdz", list(_CR2_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
+    "cr2-cas(12,29)": {
+        **_build_info("Cr2-CAS(12,29)", 58, "cc-pvdz", list(_CR2_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
 }
 
 

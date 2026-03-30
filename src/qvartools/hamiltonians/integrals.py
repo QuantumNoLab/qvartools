@@ -148,7 +148,8 @@ def compute_molecular_integrals(
         CASSCF.  CASCI uses HF MOs directly (no orbital optimisation),
         which is faster for large active spaces where CASSCF's
         iterative FCI solver would be infeasible.  Also auto-enabled
-        when the determinant count exceeds ``_FCI_CONFIG_LIMIT``.
+        when ``ncas >= 15`` or when the determinant count exceeds
+        ``_FCI_CONFIG_LIMIT``.
 
     Returns
     -------

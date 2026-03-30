@@ -36,6 +36,7 @@ from qvartools.hamiltonians.molecular import (
 __all__ = [
     "MOLECULE_REGISTRY",
     "get_molecule",
+    "get_molecule_info",
     "list_molecules",
 ]
 
@@ -812,6 +813,21 @@ MOLECULE_REGISTRY: dict[str, dict[str, Any]] = {
     },
 }
 
+_MOLECULE_INFO_REGISTRY: dict[str, dict[str, Any]] = {
+    "h2": _build_info("H2", 4, "sto-3g", _H2_GEOMETRY, 0, 0),
+    "lih": _build_info("LiH", 12, "sto-3g", _LIH_GEOMETRY, 0, 0),
+    "beh2": _build_info("BeH2", 14, "sto-3g", _BEH2_GEOMETRY, 0, 0),
+    "h2o": _build_info("H2O", 14, "sto-3g", _H2O_GEOMETRY, 0, 0),
+    "nh3": _build_info("NH3", 16, "sto-3g", _NH3_GEOMETRY, 0, 0),
+    "n2": _build_info("N2", 20, "cc-pvdz", _N2_GEOMETRY, 0, 0),
+    "ch4": _build_info("CH4", 18, "sto-3g", _CH4_GEOMETRY, 0, 0),
+    "c2h4": _build_info("C2H4", 28, "sto-3g", _C2H4_GEOMETRY, 0, 0),
+    "co": _build_info("CO", 20, "sto-3g", _CO_GEOMETRY, 0, 0),
+    "hcn": _build_info("HCN", 22, "sto-3g", _HCN_GEOMETRY, 0, 0),
+    "c2h2": _build_info("C2H2", 24, "sto-3g", _C2H2_GEOMETRY, 0, 0),
+    "h2s": _build_info("H2S", 26, "sto-3g", _H2S_GEOMETRY, 0, 0),
+}
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -871,6 +887,52 @@ def get_molecule(
     )
 
     return factory(device=device)
+
+
+def get_molecule_info(name: str) -> dict[str, Any]:
+    """Return molecule metadata without constructing a Hamiltonian.
+
+    Parameters
+    ----------
+    name : str
+        Molecule name (case-insensitive). Must be a key in
+        :data:`MOLECULE_REGISTRY`.
+
+    Returns
+    -------
+    dict
+        Metadata dictionary with keys ``name``, ``n_qubits``, ``basis``,
+        ``geometry``, ``charge``, ``spin``.
+
+    Raises
+    ------
+    KeyError
+        If ``name`` is not found in the registry.
+    """
+    key = name.lower().strip()
+    if key not in MOLECULE_REGISTRY:
+        available = ", ".join(sorted(MOLECULE_REGISTRY.keys()))
+        raise KeyError(f"Unknown molecule {name!r}. Available: {available}")
+
+    if key not in _MOLECULE_INFO_REGISTRY:
+        raise KeyError(
+            f"Molecule {name!r} is in MOLECULE_REGISTRY but missing from "
+            f"_MOLECULE_INFO_REGISTRY. Both registries must be kept in sync."
+        )
+    # Return a copy to prevent callers from mutating global state
+    info = dict(_MOLECULE_INFO_REGISTRY[key])
+    if "geometry" in info:
+        info["geometry"] = list(info["geometry"])
+    return info
+
+
+# Validate registry consistency at import time (survives python -O)
+if set(MOLECULE_REGISTRY.keys()) != set(_MOLECULE_INFO_REGISTRY.keys()):
+    raise RuntimeError(
+        "MOLECULE_REGISTRY and _MOLECULE_INFO_REGISTRY are out of sync: "
+        f"missing in info: {set(MOLECULE_REGISTRY) - set(_MOLECULE_INFO_REGISTRY)}, "
+        f"extra in info: {set(_MOLECULE_INFO_REGISTRY) - set(MOLECULE_REGISTRY)}"
+    )
 
 
 def list_molecules() -> list[str]:

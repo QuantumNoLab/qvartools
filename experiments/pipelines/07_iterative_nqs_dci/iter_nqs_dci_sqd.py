@@ -178,7 +178,9 @@ def main() -> None:
         nqs_train_epochs=config.get("nqs_train_epochs", 50),
         device=device,
     )
-    nqs_result = run_hi_nqs_sqd(hamiltonian, mol_info, config=sqd_config)
+    nqs_result = run_hi_nqs_sqd(
+        hamiltonian, mol_info, config=sqd_config, initial_basis=basis
+    )
 
     wall_time = time.perf_counter() - t_start
 

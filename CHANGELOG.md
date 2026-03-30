@@ -24,9 +24,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `QVARTOOLS_LOG_LEVEL` environment variable for log level control
 - CI: mypy type checking job, coverage threshold enforcement
 - ADR-001 decision record at `docs/decisions/`
+- `split_spin_strings()` and `cartesian_product_configs()` utilities in `_utils/formatting/bitstring_format.py`
+- `SQDConfig.use_cartesian_product` flag for alpha×beta subspace expansion in SQD (PR #15)
+- `qvartools._ext.sbd_subprocess` module: GPU-native sbd diagonalisation via subprocess wrapper (ADR-003 Phase 1, PR #17)
+- `qvartools._ext.cudaq_vqe` module: CUDA-QX VQE and ADAPT-VQE pipeline wrapper with gate fusion and active space (PR #18)
+- `initial_basis` keyword-only parameter on `run_hi_nqs_sqd()` and `run_hi_nqs_skqd()` for warm-starting cumulative basis from NF+DCI Stage 1-2 (Issue #10)
+- ADR-002 decision record (deferred: torch/numpy roundtrip not a bottleneck)
+- ADR-003 decision record (GPU-native SBD integration via r-ccs-cms/sbd)
 
 ### Fixed
 - `TransformerNFSampler._build_nqs()` used wrong parameter name `hidden_dim` instead of `hidden_dims`
+- `hi_nqs_sqd.py` passed tensors instead of numpy arrays to `vectorized_dedup`
+- Groups 07/08 pipelines discarded NF+DCI basis when calling iterative NQS solvers (Issue #10)
 
 ## [0.0.0] - 2026-03-26
 

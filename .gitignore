@@ -50,3 +50,7 @@ Thumbs.db
 experiments/__pycache__/
 experiments/methods/__pycache__/
 HANDOVER.md
+*.hdf5
+*-pyscf.chk
+*-pyscf.log
+*_metadata.json

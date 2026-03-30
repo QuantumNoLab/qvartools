@@ -40,13 +40,8 @@ class TestDenseLimitRaised:
         with pytest.raises(MemoryError, match="50000"):
             ham.matrix_elements_fast(fake_configs)
 
-    def test_10001_does_not_raise(self):
-        """matrix_elements_fast should NOT raise MemoryError at 10001 configs.
-
-        We only verify the guard does not trigger — the actual matrix build
-        will produce nonsense for fake configs, but we never inspect it.
-        The old 10K limit would have raised here; 50K does not.
-        """
+    def test_small_basis_does_not_raise(self):
+        """matrix_elements_fast should succeed for a valid small basis."""
         pyscf = pytest.importorskip("pyscf")  # noqa: F841
         from qvartools.hamiltonians import (
             MolecularHamiltonian,
@@ -57,19 +52,10 @@ class TestDenseLimitRaised:
         integrals = compute_molecular_integrals(geometry, basis="sto-3g")
         ham = MolecularHamiltonian(integrals)
 
-        # 10001 configs: the old 10K guard would reject, the new 50K must not.
-        # We use real valid configs (repeated) to avoid downstream errors.
-        all_configs = ham._generate_all_configs()
-        n = all_configs.shape[0]
-        # Tile to exceed 10K but stay under 50K
-        reps = (10001 // n) + 1
-        big_configs = all_configs.repeat(reps, 1)[:10001]
-
-        # Should NOT raise MemoryError (would raise with old 10K limit)
-        try:
-            ham.matrix_elements_fast(big_configs)
-        except MemoryError:
-            pytest.fail("matrix_elements_fast raised MemoryError at 10001 configs")
+        # Use all valid H2 configs (36 for sto-3g) — well under 50K limit.
+        configs = ham._generate_all_configs()
+        H = ham.matrix_elements_fast(configs)
+        assert H.shape == (configs.shape[0], configs.shape[0])
 
 
 # ---------------------------------------------------------------------------

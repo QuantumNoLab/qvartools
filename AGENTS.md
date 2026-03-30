@@ -648,7 +648,7 @@ Configurations are bucketed by excitation rank (0, 1, 2, 3, 4+) relative to HF r
 
 1. Define geometry in `src/qvartools/molecules/registry.py` as `_NEWMOL_GEOMETRY`
 2. Create factory function `_make_newmol(device)` following existing pattern
-3. Add entry to `MOLECULE_REGISTRY` dict with factory, n_qubits, description, basis
+3. Add entry to **both** `MOLECULE_REGISTRY` (factory + n_qubits + description + basis) **and** `_MOLECULE_INFO_REGISTRY` (geometry + charge + spin + n_qubits + basis). If either is missing, the import-time consistency check at `registry.py:631` will raise `RuntimeError`.
 4. Update README.md molecule table
 
 ### Adding a New Solver

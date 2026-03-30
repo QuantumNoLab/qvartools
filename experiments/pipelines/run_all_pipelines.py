@@ -1,4 +1,4 @@
-"""Run all 24 SKQD/SQD pipeline variants and compare results.
+"""Run all SKQD/SQD/VQE pipeline variants and compare results.
 
 Usage:
     python run_all_pipelines.py h2
@@ -25,7 +25,7 @@ from qvartools.solvers import FCISolver
 
 CHEMICAL_ACCURACY_MHA = 1.6
 
-# ---- All 24 pipelines, organized by group ----
+# ---- All pipelines, organized by group ----
 PIPELINES = [
     # (group, script_path, short_name, description)
     (
@@ -147,6 +147,18 @@ PIPELINES = [
         "Iter+DCI+PT2+SQD",
         "Iterative NQS+DCI+PT2 → SQD",
     ),
+    (
+        "09_vqe",
+        "09_vqe/vqe_uccsd.py",
+        "VQE-UCCSD",
+        "CUDA-QX VQE with UCCSD ansatz",
+    ),
+    (
+        "09_vqe",
+        "09_vqe/vqe_adapt.py",
+        "ADAPT-VQE",
+        "CUDA-QX ADAPT-VQE with GSD operator pool",
+    ),
 ]
 
 
@@ -247,7 +259,7 @@ def _parse_wall_time(output: str) -> float | None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run all 24 SKQD/SQD pipelines and compare."
+        description="Run all SKQD/SQD/VQE pipelines and compare."
     )
     parser.add_argument(
         "molecule",
@@ -269,7 +281,7 @@ def main() -> None:
     parser.add_argument(
         "--skip-quantum",
         action="store_true",
-        help="Skip quantum Krylov pipelines (no CUDA-Q needed)",
+        help="Skip CUDA-Q-dependent pipelines (quantum Krylov and VQE)",
     )
     parser.add_argument(
         "--skip-iterative",
@@ -308,7 +320,7 @@ def main() -> None:
 
         if args.only and group_num not in args.only:
             continue
-        if args.skip_quantum and "Krylov-Q" in name:
+        if args.skip_quantum and ("Krylov-Q" in name or group == "09_vqe"):
             continue
         if args.skip_iterative and group.startswith(("06", "07", "08")):
             continue

@@ -25,22 +25,25 @@ successful runs at this scale:
 | Cr₂ cc-pVDZ | 58 | CAS(12,29) | ~10¹⁰ | — | Defined |
 
 However, a direct port is **not feasible**. Systematic code review
-identifies **5 critical breaking points** and **7 silent degradation
+identifies **8 critical breaking points** and **7 silent degradation
 issues** in qvartools' current architecture.
 
 ---
 
-## Problem: 12 Breaking Points at 40 Qubits
+## Problem: 15 Breaking Points at 40 Qubits
 
 ### Critical (will crash or produce wrong results)
 
 | ID | Component | File:Line | Failure Mode | Detail |
 |----|-----------|-----------|-------------|--------|
 | **C1** | `compute_molecular_integrals` | `integrals.py:113` | **No `cas`/`casci` parameter** | Cannot build CAS Hamiltonian at all. Function only does RHF → ao2mo. No CASSCF/CASCI path exists. |
-| **C2** | `matrix_elements_fast()` | `hamiltonian.py:758` | **Hard 10K config cap** → `MemoryError` | `if n_configs > 10000: raise MemoryError(...)`. Any basis > 10K configs crashes. FGK routinely uses 15K basis. |
-| **C3** | `_try_pyscf_fci()` | `fci.py:144–156` | **Rebuilds full molecule from geometry, ignores CAS** | For N₂ cc-pVTZ: rebuilds mol with ~60 orbitals → `fci.FCI(mf)` attempts full-space FCI (14e / ~60 orbs) → **hangs forever**. Does NOT use CAS integrals. |
+| **C2** | `matrix_elements_fast()` | `hamiltonian.py:758` | **Hard 10K config cap** → `MemoryError` | `if n_configs > 10000: raise MemoryError(...)`. Called from **10 locations** across the codebase: `gpu_solve_fermion`, `skqd.py`, `spectral.py`, `dci_skqd.py` (×2), `nf_skqd.py`, `skqd_expansion.py`, `cipsi.py`, `sqd_batched.py`, `hamiltonian.matrix_elements()`. ALL crash at basis > 10K. |
+| **C3** | `_try_pyscf_fci()` | `fci.py:144–156` | **Rebuilds full molecule from geometry, ignores CAS** | For N₂ cc-pVTZ: rebuilds mol with ~60 orbitals → `fci.FCI(mf)` attempts full-space FCI (14e / ~60 orbs) → **hangs forever**. Does NOT use CAS integrals at all. |
 | **C4** | FCI energy comparison | `fci.py:173` vs `hamiltonian.py:90` | **Apples-to-oranges energy** | CAS Hamiltonian uses `E_nuc = e_core` (frozen-core + nuclear). PySCF FCI returns energy with `mol.energy_nuc()` (nuclear only). `error_mha = (final_energy - exact_energy) * 1000` is **meaningless** — the two energies have different zero points. |
 | **C5** | 26 pipeline scripts | `experiments/pipelines/**/*.py` | **All call `FCISolver().solve()`** | Every script expects `exact_energy` for comparison. C3 + C4 cascade: scripts either hang or report wrong error_mha for any CAS molecule. |
+| **C6** | `hilbert_dim = 2^num_sites` | `hamiltonian.py:75` | **Wrong Hilbert dimension for molecules** | Returns `2^40 ≈ 10^12` instead of particle-restricted `C(20,5)² = 240M`. Off by **4,575×**. Affects every consumer of `hilbert_dim`. |
+| **C7** | `KrylovBasisSampler` | `sampler.py:108,160` | **Allocates `np.zeros(2^40)`** → 16 TB → **instant OOM** | Calls `to_dense()` and allocates state vector of size `hilbert_dim`. At 40Q this is `2^40 × 16 bytes = 16 TB`. Also `to_dense()` tries to build `2^40 × 2^40` matrix → impossible. |
+| **C8** | `TrotterSampler` | `trotter_sampler.py:91` | **Calls `to_dense()` unconditionally at init** | Same as C7: builds `2^40 × 2^40` dense H → impossible. Any code path using Trotter sampling at 40Q crashes. |
 
 ### Warning (silent degradation)
 
@@ -65,8 +68,18 @@ issues** in qvartools' current architecture.
 | `DavidsonSolver` | Iterative eigensolver, triggers at >500 configs. Handles generalized eigenvalue via Cholesky. |
 | `gpu_eigsh` (CuPy) | Sparse Lanczos, exactly what large systems need. |
 | `_config_hash_batch` | `1 << 39` = 5.5×10¹¹, fits int64 (max 9.2×10¹⁸). Even at 58Q: `1 << 57` = 1.4×10¹⁷ < int64 max. |
-| `pipeline.py` Hilbert computation | Uses `math.comb()` (arbitrary precision Python ints). |
+| `pipeline.py` Hilbert computation | Uses `math.comb()` (arbitrary precision Python ints). `_n_valid_configs` correctly computes particle-restricted space. |
+| `SystemScaler` | Correctly detects molecular Hamiltonians and uses `comb(n_orb, n_alpha) * comb(n_orb, n_beta)` instead of `hilbert_dim`. |
 | `configs_to_ibm_format` / `vectorized_dedup` | Operate on tensor rows, no length limits. |
+
+### NOT usable at 40Q (must be blocked or replaced)
+
+| Component | Why it cannot work | Replacement |
+|-----------|-------------------|-------------|
+| `KrylovBasisSampler` | Allocates full state vector `np.zeros(2^40)` → 16 TB OOM | Must use sampled-basis approach, not dense state evolution |
+| `TrotterSampler` | Calls `to_dense()` at init → 2⁴⁰×2⁴⁰ matrix | Must use circuit-based Trotter (CUDA-Q) or sparse expm |
+| `ClassicalKrylovDiag` (no-subspace path) | Falls back to `to_dense()` | Always require `subspace_configs` for 40Q+ |
+| `Hamiltonian.exact_ground_state()` | Calls `to_dense()` internally | Not available for CAS molecules; use CAS-FCI via PySCF |
 
 ---
 

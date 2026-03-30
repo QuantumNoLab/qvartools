@@ -97,7 +97,10 @@ def main() -> None:
     # --- Exact reference ---
     fci_result = FCISolver().solve(hamiltonian, mol_info)
     exact_energy = fci_result.energy
-    print(f"Exact (FCI) energy: {exact_energy:.10f} Ha\n")
+    if exact_energy is not None:
+        print(f"Exact (FCI) energy: {exact_energy:.10f} Ha\n")
+    else:
+        print("FCI reference unavailable for this system.\n")
 
     # ================================================================
     # Phase 1: Iterative NQS warmup (few iterations to train NQS)
@@ -121,9 +124,12 @@ def main() -> None:
     t_warmup = time.perf_counter() - t_start
 
     warmup_energy = warmup_result.energy
-    warmup_error = (warmup_energy - exact_energy) * 1000.0
+    warmup_error = (
+        (warmup_energy - exact_energy) * 1000.0 if exact_energy is not None else None
+    )
     print(f"\nNQS warmup energy : {warmup_energy:.10f} Ha")
-    print(f"Warmup error      : {warmup_error:.4f} mHa")
+    if warmup_error is not None:
+        print(f"Warmup error      : {warmup_error:.4f} mHa")
     print(f"Warmup wall time  : {t_warmup:.2f} s")
 
     # Print warmup convergence history
@@ -131,8 +137,9 @@ def main() -> None:
     if warmup_energies:
         print("\nWarmup iteration-by-iteration convergence:")
         for i, e in enumerate(warmup_energies):
-            err = (e - exact_energy) * 1000.0
-            print(f"  iter {i + 1:>3}: {e:.10f} Ha  ({err:.4f} mHa)")
+            err = (e - exact_energy) * 1000.0 if exact_energy is not None else None
+            err_str = f"  ({err:.4f} mHa)" if err is not None else ""
+            print(f"  iter {i + 1:>3}: {e:.10f} Ha{err_str}")
 
     # ================================================================
     # Phase 2: Quantum circuit Krylov for final energy
@@ -158,13 +165,24 @@ def main() -> None:
     print("\n" + "=" * 60)
     print("PIPELINE 06b: ITERATIVE NQS + QUANTUM KRYLOV RESULTS")
     print("=" * 60)
-    error_mha = (final_energy - exact_energy) * 1000.0
-    within = "YES" if abs(error_mha) < CHEMICAL_ACCURACY_MHA else "NO"
-    print(f"Warmup energy : {warmup_energy:.10f} Ha  ({warmup_error:.4f} mHa)")
+    error_mha = (
+        (final_energy - exact_energy) * 1000.0 if exact_energy is not None else None
+    )
+    within = (
+        "YES"
+        if (error_mha is not None and abs(error_mha) < CHEMICAL_ACCURACY_MHA)
+        else ("NO" if error_mha is not None else "N/A")
+    )
+    warmup_str = f"{warmup_error:.4f} mHa" if warmup_error is not None else "N/A"
+    print(f"Warmup energy : {warmup_energy:.10f} Ha  ({warmup_str})")
     print(f"Final energy  : {final_energy:.10f} Ha")
-    print(f"Exact energy  : {exact_energy:.10f} Ha")
-    print(f"Error         : {error_mha:.4f} mHa")
-    print(f"Chemical acc. : {within} (threshold = {CHEMICAL_ACCURACY_MHA} mHa)")
+    if exact_energy is not None:
+        print(f"Exact energy  : {exact_energy:.10f} Ha")
+    else:
+        print("Exact energy  : N/A")
+    if error_mha is not None:
+        print(f"Error         : {error_mha:.4f} mHa")
+        print(f"Chemical acc. : {within} (threshold = {CHEMICAL_ACCURACY_MHA} mHa)")
     print(f"Converged     : {result.converged}")
     print(f"Final basis   : {result.diag_dim}")
     print(f"Warmup time   : {t_warmup:.2f} s")

@@ -22,11 +22,13 @@ list_molecules
 from qvartools.molecules.registry import (
     MOLECULE_REGISTRY,
     get_molecule,
+    get_molecule_info,
     list_molecules,
 )
 
 __all__ = [
     "MOLECULE_REGISTRY",
     "get_molecule",
+    "get_molecule_info",
     "list_molecules",
 ]

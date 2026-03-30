@@ -21,6 +21,7 @@ run_hi_nqs_sqd
 from __future__ import annotations
 
 import logging
+import math
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -195,6 +196,8 @@ def run_hi_nqs_sqd(
     hamiltonian: Any,
     mol_info: dict[str, Any],
     config: HINQSSQDConfig | None = None,
+    *,
+    initial_basis: torch.Tensor | None = None,
 ) -> SolverResult:
     """Execute the HI+NQS+SQD pipeline.
 
@@ -207,11 +210,21 @@ def run_hi_nqs_sqd(
         ``"n_alpha"``, ``"n_beta"``, ``"n_qubits"``.
     config : HINQSSQDConfig or None
         Pipeline configuration.
+    initial_basis : torch.Tensor or None, optional
+        Pre-computed configurations to seed the cumulative basis
+        (e.g., from NF+DCI Stage 1-2).  Shape ``(n_configs, n_qubits)``.
+        If ``None`` (default), starts from an empty basis.
 
     Returns
     -------
     SolverResult
         Energy, timing, convergence, and per-iteration metadata.
+
+    Raises
+    ------
+    ValueError
+        If ``mol_info`` is missing required keys, or if ``initial_basis``
+        has wrong shape, non-binary values, or floating-point dtype.
     """
     cfg = config or HINQSSQDConfig()
 
@@ -255,8 +268,27 @@ def run_hi_nqs_sqd(
     occ_alpha = np.full(n_orb, n_alpha / n_orb)
     occ_beta = np.full(n_orb, n_beta / n_orb)
 
-    # --- Cumulative basis ---
-    cumulative_basis = torch.zeros(0, n_qubits, dtype=torch.long, device=device)
+    # --- Cumulative basis (warm-start from initial_basis if provided) ---
+    if initial_basis is not None:
+        if initial_basis.is_floating_point():
+            raise ValueError(
+                f"initial_basis must be integer dtype (binary occupations), "
+                f"got {initial_basis.dtype}"
+            )
+        cumulative_basis = initial_basis.to(dtype=torch.long, device=device)
+        if cumulative_basis.ndim != 2 or cumulative_basis.shape[1] != n_qubits:
+            raise ValueError(
+                f"initial_basis must have shape (n_configs, {n_qubits}), "
+                f"but got {tuple(cumulative_basis.shape)}"
+            )
+        if not torch.all((cumulative_basis == 0) | (cumulative_basis == 1)):
+            raise ValueError("initial_basis must contain only binary values {0, 1}")
+        cumulative_basis = torch.unique(cumulative_basis, dim=0)
+        logger.info(
+            "Warm-starting with %d initial basis configs", cumulative_basis.shape[0]
+        )
+    else:
+        cumulative_basis = torch.zeros(0, n_qubits, dtype=torch.long, device=device)
 
     energy_history: list[float] = []
     best_energy = float("inf")
@@ -271,10 +303,12 @@ def run_hi_nqs_sqd(
                 cfg.n_samples_per_iter, temperature=cfg.temperature
             ).to(device)
 
-        # Deduplicate against cumulative basis (cpu for numpy compat)
+        # Deduplicate against cumulative basis (numpy for vectorized_dedup)
         if cumulative_basis.shape[0] > 0:
-            deduped_np = vectorized_dedup(cumulative_basis.cpu(), new_configs.cpu())
-            unique_new = torch.from_numpy(deduped_np).to(device)
+            cb_np = cumulative_basis.cpu().numpy()
+            nc_np = new_configs.cpu().numpy()
+            deduped_np = vectorized_dedup(cb_np, nc_np)
+            unique_new = torch.from_numpy(deduped_np).long().to(device)
         else:
             unique_new = torch.unique(new_configs, dim=0)
 
@@ -326,6 +360,11 @@ def run_hi_nqs_sqd(
                 e_b, coeffs_b, occs_b = gpu_solve_fermion(batch_configs, hamiltonian)
 
             e_b = float(e_b)
+            if not math.isfinite(e_b):
+                logger.warning(
+                    "Non-finite energy %.4e in batch %d, skipping", e_b, _batch_idx
+                )
+                continue
             batch_energies.append(e_b)
             latest_occs = occs_b
 
@@ -334,7 +373,14 @@ def run_hi_nqs_sqd(
                 best_coeffs = np.asarray(coeffs_b)
                 best_batch_configs = batch_configs
 
-        iter_energy = float(np.min(batch_energies))
+        if not batch_energies:
+            logger.warning(
+                "All batches produced non-finite energies at iteration %d",
+                iteration + 1,
+            )
+            iter_energy = float("inf")
+        else:
+            iter_energy = float(np.min(batch_energies))
         energy_history.append(iter_energy)
         best_energy = min(best_energy, iter_energy)
 

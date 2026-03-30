@@ -105,7 +105,10 @@ def main() -> None:
 
     fci_result = FCISolver().solve(hamiltonian, mol_info)
     exact_energy = fci_result.energy
-    print(f"Exact (FCI) energy: {exact_energy:.10f} Ha")
+    if exact_energy is not None:
+        print(f"Exact (FCI) energy: {exact_energy:.10f} Ha")
+    else:
+        print("FCI reference unavailable for this system.")
 
     noise_rate = config.get("sqd_noise_rate", get_noise_rate(n_qubits))
     td = get_training_params(n_configs)
@@ -152,15 +155,29 @@ def main() -> None:
     final_energy = pipeline.results.get(
         "final_energy", pipeline.results.get("combined_energy")
     )
-    error_mha = (final_energy - exact_energy) * 1000.0 if final_energy else None
+    error_mha = (
+        (final_energy - exact_energy) * 1000.0
+        if (final_energy is not None and exact_energy is not None)
+        else None
+    )
 
     print(f"\n{'=' * 60}")
     print("NF-ONLY + SQD RESULTS")
     print(f"{'=' * 60}")
-    print(f"Final energy : {final_energy:.10f} Ha")
-    print(f"Exact energy : {exact_energy:.10f} Ha")
+    if final_energy is not None:
+        print(f"Final energy : {final_energy:.10f} Ha")
+    else:
+        print("Final energy : N/A")
+    if exact_energy is not None:
+        print(f"Exact energy : {exact_energy:.10f} Ha")
+    else:
+        print("Exact energy : N/A")
     if error_mha is not None:
-        within = "YES" if abs(error_mha) < CHEMICAL_ACCURACY_MHA else "NO"
+        within = (
+            "YES"
+            if (error_mha is not None and abs(error_mha) < CHEMICAL_ACCURACY_MHA)
+            else ("NO" if error_mha is not None else "N/A")
+        )
         print(f"Error        : {error_mha:.4f} mHa")
         print(f"Chemical acc.: {within} (threshold = {CHEMICAL_ACCURACY_MHA} mHa)")
     print(f"Wall time    : {wall_time:.2f} s")

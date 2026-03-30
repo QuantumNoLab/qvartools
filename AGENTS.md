@@ -229,7 +229,7 @@ qvartools/
 │   ├── solvers/                  # High-level solver interfaces
 │   │   ├── solver.py             # Solver ABC, SolverResult (frozen dataclass)
 │   │   ├── reference/
-│   │   │   ├── fci.py            # FCISolver (PySCF native or dense fallback)
+│   │   │   ├── fci.py            # FCISolver (PySCF native, CAS-aware, or dense fallback)
 │   │   │   └── ccsd.py           # CCSDSolver (PySCF CCSD)
 │   │   ├── subspace/
 │   │   │   ├── sqd.py            # SQDSolver (NF-sampling → direct diag)
@@ -259,19 +259,24 @@ qvartools/
 │   ├── molecules/                # Molecular system registry
 │   │   └── registry.py           # MOLECULE_REGISTRY (12 molecules), get_molecule, list_molecules
 │   │
+│   ├── _ext/                     # Experimental GPU extensions
+│   │   ├── __init__.py
+│   │   ├── sbd_subprocess.py     # sbd_diagonalize, sbd_available (ADR-003 Phase 1)
+│   │   └── cudaq_vqe.py          # run_cudaq_vqe (CUDA-QX VQE + ADAPT-VQE wrapper)
+│   │
 │   ├── methods/                  # End-to-end method pipelines
 │   │   └── nqs/
 │   │       ├── nqs_sqd.py        # NQSSQDConfig, run_nqs_sqd
 │   │       ├── nqs_skqd.py       # NQSSKQDConfig, run_nqs_skqd
-│   │       ├── hi_nqs_sqd.py     # HINQSSQDConfig, run_hi_nqs_sqd (iterative with feedback)
-│   │       └── hi_nqs_skqd.py    # HINQSSKQDConfig, run_hi_nqs_skqd (iterative with feedback)
+│   │       ├── hi_nqs_sqd.py     # HINQSSQDConfig, run_hi_nqs_sqd (initial_basis warm-start)
+│   │       └── hi_nqs_skqd.py    # HINQSSKQDConfig, run_hi_nqs_skqd (initial_basis warm-start)
 │   │
 │   └── _utils/                   # Internal utilities
 │       ├── scaling/
 │       │   ├── quality_presets.py   # QualityPreset, SystemTier, SystemMetrics, ScaledParameters
 │       │   └── system_scaler.py     # SystemScaler (auto-adapt parameters to system size)
 │       ├── formatting/
-│       │   └── bitstring_format.py  # configs_to_ibm_format, ibm_format_to_configs, vectorized_dedup, hash_config
+│       │   └── bitstring_format.py  # configs_to_ibm_format, ibm_format_to_configs, vectorized_dedup, hash_config, split_spin_strings, cartesian_product_configs
 │       ├── hashing/
 │       │   ├── config_hash.py       # ConfigHash, config_integer_hash (overflow-safe)
 │       │   └── connection_cache.py  # ConnectionCache (LRU, stats tracking)
@@ -303,6 +308,8 @@ qvartools/
 │   │   └── test_diversity.py     # DiversitySelector, excitation_rank, hamming_distance
 │   ├── test_solvers/
 │   │   └── test_base.py          # Solver ABC, SolverResult
+│   ├── test_methods/
+│   │   └── test_initial_basis.py     # initial_basis warm-start contract + dedup tests
 │   ├── test_utils/
 │   │   ├── test_format_utils.py      # hash_config, vectorized_dedup
 │   │   ├── test_connection_cache.py  # ConnectionCache
@@ -548,6 +555,8 @@ pytest --cov=qvartools --cov-report=term-missing
 | `test_krylov/` | SKQD, basis sampler, residual/selected-CI expansion | `pyscf` |
 | `test_diag/` | Eigensolvers, diversity selection | — |
 | `test_solvers/` | Solver ABC, SolverResult | — |
+| `test_methods/` | initial_basis warm-start, shape validation | — |
+| `test_ext/` | sbd subprocess, CUDA-QX VQE wrappers | `gpu`, `slow` |
 | `test_utils/` | Format utils, connection cache | — |
 | `test_integration/` | Full H2/BeH2/spin pipelines | `pyscf` |
 
@@ -648,7 +657,7 @@ Configurations are bucketed by excitation rank (0, 1, 2, 3, 4+) relative to HF r
 
 1. Define geometry in `src/qvartools/molecules/registry.py` as `_NEWMOL_GEOMETRY`
 2. Create factory function `_make_newmol(device)` following existing pattern
-3. Add entry to `MOLECULE_REGISTRY` dict with factory, n_qubits, description, basis
+3. Add entry to **both** `MOLECULE_REGISTRY` (factory + n_qubits + description + basis) **and** `_MOLECULE_INFO_REGISTRY` (geometry + charge + spin + n_qubits + basis). If either is missing, the import-time consistency check at `registry.py:631` will raise `RuntimeError`.
 4. Update README.md molecule table
 
 ### Adding a New Solver
@@ -722,6 +731,18 @@ Many modules guard optional imports with try/except and raise `ImportError` with
 ### Dense Matrix Guard
 
 `matrix_elements_fast()` refuses to build matrices for >50,000 configurations (raises `MemoryError`). Use `build_sparse_hamiltonian()` or Davidson solver for larger systems.
+
+### GPU Extensions (`_ext/`)
+
+The `_ext/` subpackage is **experimental and optional**. `sbd_subprocess` requires the `sbd` binary compiled from r-ccs-cms/sbd + MPI runtime. `cudaq_vqe` requires CUDA-Q >= 0.14 and CUDA-QX Solvers >= 0.5. Both import-guard gracefully when deps are missing.
+
+### Initial Basis Warm-Start
+
+`run_hi_nqs_sqd()` and `run_hi_nqs_skqd()` accept `initial_basis: torch.Tensor | None = None` (keyword-only). The tensor must be 2D with shape `(n_configs, n_qubits)` — a `ValueError` is raised otherwise. Duplicates are automatically removed via `torch.unique`.
+
+### SQD Cartesian Product Expansion
+
+When `SQDConfig.use_cartesian_product=True` (default), SQD splits sampled configs into alpha/beta spin strings via `split_spin_strings()`, then enumerates all alpha×beta pairs via `cartesian_product_configs()`. This dramatically improves basis coverage for molecular Hamiltonians.
 
 ---
 

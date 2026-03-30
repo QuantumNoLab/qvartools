@@ -22,6 +22,7 @@ run_hi_nqs_skqd
 from __future__ import annotations
 
 import logging
+import math
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -200,6 +201,8 @@ def run_hi_nqs_skqd(
     hamiltonian: Any,
     mol_info: dict[str, Any],
     config: HINQSSKQDConfig | None = None,
+    *,
+    initial_basis: torch.Tensor | None = None,
 ) -> SolverResult:
     """Execute the HI+NQS+SKQD pipeline.
 
@@ -213,11 +216,21 @@ def run_hi_nqs_skqd(
         ``"n_alpha"``, ``"n_beta"``, ``"n_qubits"``.
     config : HINQSSKQDConfig or None
         Pipeline configuration.
+    initial_basis : torch.Tensor or None, optional
+        Pre-computed configurations to seed the cumulative basis
+        (e.g., from NF+DCI Stage 1-2).  Shape ``(n_configs, n_qubits)``.
+        If ``None`` (default), starts from an empty basis.
 
     Returns
     -------
     SolverResult
         Energy, timing, convergence, and iteration metadata.
+
+    Raises
+    ------
+    ValueError
+        If ``mol_info`` is missing required keys, or if ``initial_basis``
+        has wrong shape, non-binary values, or floating-point dtype.
     """
     cfg = config or HINQSSKQDConfig()
 
@@ -261,8 +274,27 @@ def run_hi_nqs_skqd(
     occ_alpha = np.full(n_orb, n_alpha / n_orb)
     occ_beta = np.full(n_orb, n_beta / n_orb)
 
-    # --- Cumulative basis ---
-    cumulative_basis = torch.zeros(0, n_qubits, dtype=torch.long, device=device)
+    # --- Cumulative basis (warm-start from initial_basis if provided) ---
+    if initial_basis is not None:
+        if initial_basis.is_floating_point():
+            raise ValueError(
+                f"initial_basis must be integer dtype (binary occupations), "
+                f"got {initial_basis.dtype}"
+            )
+        cumulative_basis = initial_basis.to(dtype=torch.long, device=device)
+        if cumulative_basis.ndim != 2 or cumulative_basis.shape[1] != n_qubits:
+            raise ValueError(
+                f"initial_basis must have shape (n_configs, {n_qubits}), "
+                f"but got {tuple(cumulative_basis.shape)}"
+            )
+        if not torch.all((cumulative_basis == 0) | (cumulative_basis == 1)):
+            raise ValueError("initial_basis must contain only binary values {0, 1}")
+        cumulative_basis = torch.unique(cumulative_basis, dim=0)
+        logger.info(
+            "Warm-starting with %d initial basis configs", cumulative_basis.shape[0]
+        )
+    else:
+        cumulative_basis = torch.zeros(0, n_qubits, dtype=torch.long, device=device)
 
     energy_history: list[float] = []
     basis_size_history: list[int] = []
@@ -347,6 +379,11 @@ def run_hi_nqs_skqd(
                 e_b, coeffs_b, occs_b = gpu_solve_fermion(batch_configs, hamiltonian)
 
             e_b = float(e_b)
+            if not math.isfinite(e_b):
+                logger.warning(
+                    "Non-finite energy %.4e in batch %d, skipping", e_b, _batch_idx
+                )
+                continue
             batch_energies.append(e_b)
             latest_occs = occs_b
 
@@ -355,7 +392,14 @@ def run_hi_nqs_skqd(
                 best_coeffs = np.asarray(coeffs_b)
                 best_batch_configs = batch_configs
 
-        iter_energy = float(np.min(batch_energies))
+        if not batch_energies:
+            logger.warning(
+                "All batches produced non-finite energies at iteration %d",
+                iteration + 1,
+            )
+            iter_energy = float("inf")
+        else:
+            iter_energy = float(np.min(batch_energies))
         energy_history.append(iter_energy)
         basis_size_history.append(int(cumulative_basis.shape[0]))
         best_energy = min(best_energy, iter_energy)

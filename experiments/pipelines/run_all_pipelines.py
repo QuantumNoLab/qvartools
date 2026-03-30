@@ -1,4 +1,4 @@
-"""Run all 24 SKQD/SQD pipeline variants and compare results.
+"""Run all SKQD/SQD/VQE pipeline variants and compare results.
 
 Usage:
     python run_all_pipelines.py h2
@@ -25,7 +25,7 @@ from qvartools.solvers import FCISolver
 
 CHEMICAL_ACCURACY_MHA = 1.6
 
-# ---- All 24 pipelines, organized by group ----
+# ---- All pipelines, organized by group ----
 PIPELINES = [
     # (group, script_path, short_name, description)
     (
@@ -147,6 +147,18 @@ PIPELINES = [
         "Iter+DCI+PT2+SQD",
         "Iterative NQS+DCI+PT2 → SQD",
     ),
+    (
+        "09_vqe",
+        "09_vqe/vqe_uccsd.py",
+        "VQE-UCCSD",
+        "CUDA-QX VQE with UCCSD ansatz",
+    ),
+    (
+        "09_vqe",
+        "09_vqe/vqe_adapt.py",
+        "ADAPT-VQE",
+        "CUDA-QX ADAPT-VQE with GSD operator pool",
+    ),
 ]
 
 
@@ -247,7 +259,7 @@ def _parse_wall_time(output: str) -> float | None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run all 24 SKQD/SQD pipelines and compare."
+        description="Run all SKQD/SQD/VQE pipelines and compare."
     )
     parser.add_argument(
         "molecule",
@@ -269,7 +281,7 @@ def main() -> None:
     parser.add_argument(
         "--skip-quantum",
         action="store_true",
-        help="Skip quantum Krylov pipelines (no CUDA-Q needed)",
+        help="Skip CUDA-Q-dependent pipelines (quantum Krylov and VQE)",
     )
     parser.add_argument(
         "--skip-iterative",
@@ -298,7 +310,10 @@ def main() -> None:
     hamiltonian, mol_info = get_molecule(molecule, device=device)
     fci_result = FCISolver().solve(hamiltonian, mol_info)
     exact_energy = fci_result.energy
-    print(f"  Exact (FCI) energy: {exact_energy:.10f} Ha")
+    if exact_energy is not None:
+        print(f"  Exact (FCI) energy: {exact_energy:.10f} Ha")
+    else:
+        print("  FCI reference unavailable for this system.")
     print(f"{'=' * 80}\n")
 
     # Filter pipelines
@@ -308,7 +323,7 @@ def main() -> None:
 
         if args.only and group_num not in args.only:
             continue
-        if args.skip_quantum and "Krylov-Q" in name:
+        if args.skip_quantum and ("Krylov-Q" in name or group == "09_vqe"):
             continue
         if args.skip_iterative and group.startswith(("06", "07", "08")):
             continue
@@ -332,7 +347,7 @@ def main() -> None:
         error_mha = result.get("error_mha")
         wall_time = result.get("wall_time", elapsed)
 
-        if energy is not None and error_mha is None:
+        if energy is not None and error_mha is None and exact_energy is not None:
             error_mha = (energy - exact_energy) * 1000.0
 
         status_icon = {
@@ -369,7 +384,10 @@ def main() -> None:
     # Print summary table
     print(f"\n{'=' * 100}")
     print(f"  COMPARISON TABLE: {molecule.upper()}")
-    print(f"  Exact (FCI) energy: {exact_energy:.10f} Ha")
+    if exact_energy is not None:
+        print(f"  Exact (FCI) energy: {exact_energy:.10f} Ha")
+    else:
+        print("  Exact (FCI) energy: N/A")
     print(f"  Chemical accuracy threshold: {CHEMICAL_ACCURACY_MHA} mHa")
     print(f"{'=' * 100}")
     print(
@@ -400,14 +418,22 @@ def main() -> None:
         best = min(ok_results, key=lambda r: r["energy"])
         fastest = min(ok_results, key=lambda r: r["wall_time"] or float("inf"))
         n_chem_acc = sum(
-            1 for r in ok_results if abs(r["error_mha"] or 999) < CHEMICAL_ACCURACY_MHA
+            1
+            for r in ok_results
+            if r["error_mha"] is not None
+            and abs(r["error_mha"]) < CHEMICAL_ACCURACY_MHA
         )
 
         print(f"\n  Completed: {len(ok_results)}/{len(results)}")
         print(f"  Chemical accuracy: {n_chem_acc}/{len(ok_results)}")
-        print(
-            f"  Best energy: {best['name']} ({best['energy']:.10f} Ha, {best['error_mha']:.4f} mHa)"
-        )
+        if best["error_mha"] is not None:
+            print(
+                f"  Best energy: {best['name']} ({best['energy']:.10f} Ha, {best['error_mha']:.4f} mHa)"
+            )
+        else:
+            print(
+                f"  Best energy: {best['name']} ({best['energy']:.10f} Ha, error: N/A)"
+            )
         print(f"  Fastest: {fastest['name']} ({fastest['wall_time']:.1f}s)")
 
     failed = [r for r in results if r["status"] != "OK"]

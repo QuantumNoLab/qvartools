@@ -29,6 +29,8 @@ qvartools follows a **bottom-up, fine-grained module** design:
 
     solvers/ -----> flows/, krylov/, postprocessing/, hamiltonians/, molecules/
     samplers/ ----> flows/, hamiltonians/
+    methods/ -----> solvers/, krylov/, nqs/, samplers/
+    _ext/ --------> hamiltonians/, molecules/ (optional: sbd binary, cudaq)
 ```
 
 Key dependency rules:
@@ -39,6 +41,8 @@ Key dependency rules:
 - `krylov/` depends on `hamiltonians/` and `postprocessing/`
 - `postprocessing/` depends on `hamiltonians/` (for projected Hamiltonian construction)
 - `solvers/` depends on most subpackages but is a leaf consumer -- nothing depends on it
+- `methods/` provides end-to-end pipelines combining `solvers/`, `krylov/`, `nqs/`, and `samplers/`
+- `_ext/` provides optional GPU-accelerated backends (sbd subprocess, CUDA-QX VQE); requires external binaries
 - `pipeline.py` orchestrates `flows/`, `krylov/`, `postprocessing/`, `molecules/`, and `nqs/`
 - `_utils/` is internal and used by several subpackages
 

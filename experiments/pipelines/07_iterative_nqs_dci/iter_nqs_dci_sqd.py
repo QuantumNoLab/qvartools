@@ -120,7 +120,10 @@ def main() -> None:
 
     fci_result = FCISolver().solve(hamiltonian, mol_info)
     exact_energy = fci_result.energy
-    print(f"Exact (FCI) energy: {exact_energy:.10f} Ha")
+    if exact_energy is not None:
+        print(f"Exact (FCI) energy: {exact_energy:.10f} Ha")
+    else:
+        print("FCI reference unavailable for this system.")
     print("-" * 60)
 
     train_defaults = get_training_params(n_configs)
@@ -175,22 +178,31 @@ def main() -> None:
         nqs_train_epochs=config.get("nqs_train_epochs", 50),
         device=device,
     )
-    nqs_result = run_hi_nqs_sqd(hamiltonian, mol_info, config=sqd_config)
+    nqs_result = run_hi_nqs_sqd(
+        hamiltonian, mol_info, config=sqd_config, initial_basis=basis
+    )
 
     wall_time = time.perf_counter() - t_start
 
     final_energy = nqs_result.energy
     if nf_dci_energy is not None:
         final_energy = min(final_energy, nf_dci_energy)
-    error_mha = (final_energy - exact_energy) * 1000.0
-    within = "YES" if abs(error_mha) < CHEMICAL_ACCURACY_MHA else "NO"
+    error_mha = (
+        (final_energy - exact_energy) * 1000.0 if exact_energy is not None else None
+    )
+    within = (
+        "YES"
+        if (error_mha is not None and abs(error_mha) < CHEMICAL_ACCURACY_MHA)
+        else ("NO" if error_mha is not None else "N/A")
+    )
 
     energy_history = nqs_result.metadata.get("energy_history", [])
     if energy_history:
         print("\n  Iterative NQS+SQD convergence:")
         for i, e in enumerate(energy_history):
-            err = (e - exact_energy) * 1000.0
-            print(f"    iter {i + 1:>3}: {e:.10f} Ha  (error: {err:.4f} mHa)")
+            err = (e - exact_energy) * 1000.0 if exact_energy is not None else None
+            err_str = f"  (error: {err:.4f} mHa)" if err is not None else ""
+            print(f"    iter {i + 1:>3}: {e:.10f} Ha{err_str}")
 
     print("\n" + "=" * 60)
     print("PIPELINE 07c: NF+DCI MERGE -> ITERATIVE NQS+SQD RESULTS")
@@ -199,9 +211,13 @@ def main() -> None:
     print(f"NF+DCI basis     : {basis.shape[0]} configs")
     print(f"NQS converged    : {nqs_result.converged}")
     print(f"\nFinal energy : {final_energy:.10f} Ha")
-    print(f"Exact energy : {exact_energy:.10f} Ha")
-    print(f"Error        : {error_mha:.4f} mHa")
-    print(f"Chemical acc.: {within}")
+    if exact_energy is not None:
+        print(f"Exact energy : {exact_energy:.10f} Ha")
+    else:
+        print("Exact energy : N/A")
+    if error_mha is not None:
+        print(f"Error        : {error_mha:.4f} mHa")
+        print(f"Chemical acc.: {within}")
     print(f"Wall time    : {wall_time:.2f} s")
     print("=" * 60)
 

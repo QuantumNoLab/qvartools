@@ -125,9 +125,9 @@ def gpu_solve_fermion(
             SPARSE_H_THRESHOLD,
         )
         H_sp = hamiltonian.build_sparse_hamiltonian(configs)
+        # build_sparse_hamiltonian already returns a symmetric matrix
+        # (lower + lower^T - diag), so no extra symmetrization needed.
         H_csr = H_sp.tocsr().astype(np.float64)
-        # Ensure exact symmetry
-        H_csr = 0.5 * (H_csr + H_csr.T)
         E0, v0 = _sparse_diag(H_csr)
     else:
         H_proj = hamiltonian.matrix_elements_fast(configs)
@@ -180,6 +180,11 @@ def _sparse_diag(
         Corresponding eigenvector, shape ``(n,)``.
     """
     n = H_csr.shape[0]
+
+    # 1x1 matrix: return the single diagonal element directly
+    if n <= 1:
+        diag = H_csr.diagonal()
+        return float(diag[0]), np.array([1.0])
 
     if _CUPY_AVAILABLE:
         try:

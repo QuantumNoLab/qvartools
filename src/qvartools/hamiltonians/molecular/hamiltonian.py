@@ -160,6 +160,10 @@ class MolecularHamiltonian(Hamiltonian):
         self._precompute_excitation_indices()
 
         # Integer hashing helpers
+        # _use_split_hash is only needed for >=64 spin-orbitals (32+ spatial
+        # orbitals) to avoid int64 overflow.  Our CAS systems max out at 58
+        # spin-orbitals (C2H4, 28 qubits with sto-3g), so in practice this
+        # path is never triggered by the molecule registry.
         self._use_split_hash = num_sites >= 64
 
         logger.info(
@@ -849,6 +853,9 @@ class MolecularHamiltonian(Hamiltonian):
         configs = configs.to(self.device)
         n_configs = configs.shape[0]
 
+        if n_configs == 0:
+            raise ValueError("Empty basis — cannot build sparse Hamiltonian")
+
         # --- Diagonal elements ---
         diag_vals = self.diagonal_elements_batch(configs).detach().cpu().numpy()
 
@@ -893,11 +900,11 @@ class MolecularHamiltonian(Hamiltonian):
 
             # Only store lower-triangle entries (i > j) to avoid duplicates.
             # Symmetry is enforced below by adding the transpose.
-            for idx, val in zip(final_i, final_vals):
-                if int(idx) > j:
-                    rows.append(int(idx))
-                    cols.append(j)
-                    data.append(float(val))
+            lower_mask = final_i > j
+            if lower_mask.any():
+                rows.extend(final_i[lower_mask].tolist())
+                cols.extend([j] * int(lower_mask.sum()))
+                data.extend(final_vals[lower_mask].tolist())
 
         # Build lower-triangle COO (diagonal + strictly lower)
         H_lower = scipy.sparse.coo_matrix(

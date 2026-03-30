@@ -224,7 +224,10 @@ class TestCacheBypassForCAS:
             cached_compute_molecular_integrals(
                 N2_GEOMETRY, basis="cc-pvdz", cas=(10, 8)
             )
-            mock_cached_fn.assert_not_called(), (
-                "joblib cached function was invoked for CAS integrals — "
-                "CAS results must bypass the cache"
+            (
+                mock_cached_fn.assert_not_called(),
+                (
+                    "joblib cached function was invoked for CAS integrals — "
+                    "CAS results must bypass the cache"
+                ),
             )

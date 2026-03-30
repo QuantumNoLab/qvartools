@@ -205,7 +205,7 @@ class FCISolver(Solver):
             "n_beta": n_beta,
         }
 
-        return float(e_fci), diag_dim, True, metadata
+        return float(e_fci), diag_dim, bool(mf.converged), metadata
 
     def _try_cas_fci(
         self,
@@ -301,6 +301,8 @@ class FCISolver(Solver):
             "n_beta": n_beta,
         }
 
+        cas_converged = getattr(cisolver, "converged", True)
+
         logger.info(
             "CAS FCI: n_orb=%d, nelec=(%d, %d), dim=%d, energy=%.10f",
             n_orb,
@@ -310,7 +312,7 @@ class FCISolver(Solver):
             e_fci,
         )
 
-        return float(e_fci), diag_dim, True, metadata
+        return float(e_fci), diag_dim, bool(cas_converged), metadata
 
     def _dense_fallback(self, hamiltonian: Hamiltonian) -> tuple:
         """Fall back to dense exact diagonalisation.

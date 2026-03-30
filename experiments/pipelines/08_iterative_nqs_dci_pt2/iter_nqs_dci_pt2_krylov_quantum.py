@@ -134,7 +134,10 @@ def main() -> None:
 
     fci_result = FCISolver().solve(hamiltonian, mol_info)
     exact_energy = fci_result.energy
-    print(f"Exact (FCI) energy: {exact_energy:.10f} Ha")
+    if exact_energy is not None:
+        print(f"Exact (FCI) energy: {exact_energy:.10f} Ha")
+    else:
+        print("FCI reference unavailable for this system.")
     print("-" * 60)
 
     train_defaults = get_training_params(n_configs)
@@ -206,8 +209,14 @@ def main() -> None:
     wall_time = time.perf_counter() - t_start
 
     final_energy = result.energy
-    error_mha = (final_energy - exact_energy) * 1000.0
-    within = "YES" if abs(error_mha) < CHEMICAL_ACCURACY_MHA else "NO"
+    error_mha = (
+        (final_energy - exact_energy) * 1000.0 if exact_energy is not None else None
+    )
+    within = (
+        "YES"
+        if (error_mha is not None and abs(error_mha) < CHEMICAL_ACCURACY_MHA)
+        else ("NO" if error_mha is not None else "N/A")
+    )
 
     print("\n" + "=" * 60)
     print("PIPELINE 08b: NF+DCI+PT2 -> QUANTUM KRYLOV RESULTS")
@@ -217,9 +226,13 @@ def main() -> None:
     print(f"PT2 expanded     : {basis.shape[0]} configs")
     print(f"Quantum time     : {quantum_time:.2f} s")
     print(f"\nFinal energy : {final_energy:.10f} Ha")
-    print(f"Exact energy : {exact_energy:.10f} Ha")
-    print(f"Error        : {error_mha:.4f} mHa")
-    print(f"Chemical acc.: {within}")
+    if exact_energy is not None:
+        print(f"Exact energy : {exact_energy:.10f} Ha")
+    else:
+        print("Exact energy : N/A")
+    if error_mha is not None:
+        print(f"Error        : {error_mha:.4f} mHa")
+        print(f"Chemical acc.: {within}")
     print(f"Wall time    : {wall_time:.2f} s")
     print("=" * 60)
 

@@ -13,8 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: Default `subspace_mode` changed from `"skqd"` to `"classical_krylov"`
 - `subspace_mode="skqd"` now routes to `QuantumCircuitSKQD` (real CUDA-Q SKQD)
 - Old class names kept as deprecated aliases until v0.1.0
+- `FCISolver._dense_fallback()` returns `None` instead of raising `RuntimeError` for large Hilbert spaces
 
 ### Added
+- CAS-aware `FCISolver` using active-space integrals directly (no full molecule rebuild)
+- FCI-free pipeline support: 25 experiment scripts gracefully handle `exact_energy=None`
 - `TransformerAsNQS` adapter: enables `AutoregressiveTransformer` in NF training pipeline
 - `NQSWithSampling` adapter: enables any `NeuralQuantumState` in HI training pipeline
 - `qvartools._logging` module with `configure_logging()` and `get_logger()`

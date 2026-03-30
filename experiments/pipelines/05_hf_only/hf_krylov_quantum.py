@@ -93,7 +93,10 @@ def main() -> None:
     # --- Exact energy ---
     fci_result = FCISolver().solve(hamiltonian, mol_info)
     exact_energy = fci_result.energy
-    print(f"Exact (FCI) energy: {exact_energy:.10f} Ha")
+    if exact_energy is not None:
+        print(f"Exact (FCI) energy: {exact_energy:.10f} Ha")
+    else:
+        print("FCI reference unavailable for this system.")
     print("-" * 60)
 
     # --- Build QuantumSKQDConfig for HF-only initial state ---
@@ -126,8 +129,14 @@ def main() -> None:
 
     # --- Results summary ---
     final_energy = results["best_energy"]
-    error_mha = (final_energy - exact_energy) * 1000.0
-    within = "YES" if abs(error_mha) < CHEMICAL_ACCURACY_MHA else "NO"
+    error_mha = (
+        (final_energy - exact_energy) * 1000.0 if exact_energy is not None else None
+    )
+    within = (
+        "YES"
+        if (error_mha is not None and abs(error_mha) < CHEMICAL_ACCURACY_MHA)
+        else ("NO" if error_mha is not None else "N/A")
+    )
 
     print(f"\n{'=' * 60}")
     print("QUANTUM CIRCUIT SKQD RESULTS (HF-only -> Trotterized Krylov)")
@@ -137,13 +146,18 @@ def main() -> None:
     if energies:
         print("\n  Energy convergence per Krylov dimension:")
         for i, e in enumerate(energies):
-            step_err = (e - exact_energy) * 1000.0
-            print(f"    k={i + 2:>3}: {e:.10f} Ha  (error: {step_err:.4f} mHa)")
+            step_err = (e - exact_energy) * 1000.0 if exact_energy is not None else None
+            step_str = f"  (error: {step_err:.4f} mHa)" if step_err is not None else ""
+            print(f"    k={i + 2:>3}: {e:.10f} Ha{step_str}")
 
     print(f"\nFinal energy : {final_energy:.10f} Ha")
-    print(f"Exact energy : {exact_energy:.10f} Ha")
-    print(f"Error        : {error_mha:.4f} mHa")
-    print(f"Chemical acc.: {within}")
+    if exact_energy is not None:
+        print(f"Exact energy : {exact_energy:.10f} Ha")
+    else:
+        print("Exact energy : N/A")
+    if error_mha is not None:
+        print(f"Error        : {error_mha:.4f} mHa")
+        print(f"Chemical acc.: {within}")
     basis_sizes = results.get("basis_sizes", [])
     print(f"Basis size   : {basis_sizes[-1] if basis_sizes else '?'}")
     print(f"Backend      : {results.get('backend', '?')}")

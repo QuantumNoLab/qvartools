@@ -229,7 +229,7 @@ qvartools/
 │   ├── solvers/                  # High-level solver interfaces
 │   │   ├── solver.py             # Solver ABC, SolverResult (frozen dataclass)
 │   │   ├── reference/
-│   │   │   ├── fci.py            # FCISolver (PySCF native or dense fallback)
+│   │   │   ├── fci.py            # FCISolver (PySCF native, CAS-aware, or dense fallback)
 │   │   │   └── ccsd.py           # CCSDSolver (PySCF CCSD)
 │   │   ├── subspace/
 │   │   │   ├── sqd.py            # SQDSolver (NF-sampling → direct diag)

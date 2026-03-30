@@ -156,7 +156,10 @@ def main() -> None:
     # --- Compute exact energy for comparison ---
     fci_result = FCISolver().solve(hamiltonian, mol_info)
     exact_energy = fci_result.energy
-    print(f"Exact (FCI) energy: {exact_energy:.10f} Ha")
+    if exact_energy is not None:
+        print(f"Exact (FCI) energy: {exact_energy:.10f} Ha")
+    else:
+        print("FCI reference unavailable for this system.")
     print("-" * 60)
 
     # --- Auto-scale defaults, then override with config values ---
@@ -271,14 +274,21 @@ def main() -> None:
         "final_energy", pipeline.results.get("combined_energy")
     )
     error_mha = pipeline.results.get("error_mha")
-    if error_mha is None and final_energy is not None:
+    if error_mha is None and final_energy is not None and exact_energy is not None:
         error_mha = (final_energy - exact_energy) * 1000.0
 
     print(f"\nFinal energy : {final_energy:.10f} Ha")
-    print(f"Exact energy : {exact_energy:.10f} Ha")
+    if exact_energy is not None:
+        print(f"Exact energy : {exact_energy:.10f} Ha")
+    else:
+        print("Exact energy : N/A")
     if error_mha is not None:
         print(f"Error        : {error_mha:.4f} mHa")
-        within = "YES" if abs(error_mha) < CHEMICAL_ACCURACY_MHA else "NO"
+        within = (
+            "YES"
+            if (error_mha is not None and abs(error_mha) < CHEMICAL_ACCURACY_MHA)
+            else ("NO" if error_mha is not None else "N/A")
+        )
         print(f"Chemical acc.: {within} (threshold = {CHEMICAL_ACCURACY_MHA} mHa)")
     print(f"Wall time    : {wall_time:.2f} s")
     print("=" * 60)

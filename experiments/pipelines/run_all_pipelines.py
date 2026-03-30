@@ -298,7 +298,10 @@ def main() -> None:
     hamiltonian, mol_info = get_molecule(molecule, device=device)
     fci_result = FCISolver().solve(hamiltonian, mol_info)
     exact_energy = fci_result.energy
-    print(f"  Exact (FCI) energy: {exact_energy:.10f} Ha")
+    if exact_energy is not None:
+        print(f"  Exact (FCI) energy: {exact_energy:.10f} Ha")
+    else:
+        print("  FCI reference unavailable for this system.")
     print(f"{'=' * 80}\n")
 
     # Filter pipelines
@@ -332,7 +335,7 @@ def main() -> None:
         error_mha = result.get("error_mha")
         wall_time = result.get("wall_time", elapsed)
 
-        if energy is not None and error_mha is None:
+        if energy is not None and error_mha is None and exact_energy is not None:
             error_mha = (energy - exact_energy) * 1000.0
 
         status_icon = {
@@ -369,7 +372,10 @@ def main() -> None:
     # Print summary table
     print(f"\n{'=' * 100}")
     print(f"  COMPARISON TABLE: {molecule.upper()}")
-    print(f"  Exact (FCI) energy: {exact_energy:.10f} Ha")
+    if exact_energy is not None:
+        print(f"  Exact (FCI) energy: {exact_energy:.10f} Ha")
+    else:
+        print("  Exact (FCI) energy: N/A")
     print(f"  Chemical accuracy threshold: {CHEMICAL_ACCURACY_MHA} mHa")
     print(f"{'=' * 100}")
     print(

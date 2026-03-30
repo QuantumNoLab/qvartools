@@ -6,12 +6,20 @@ Implements :class:`FCISolver`, which computes the exact ground-state
 energy via full configuration interaction.  Uses PySCF's FCI module
 when available; falls back to dense diagonalisation of the Hamiltonian
 matrix for small systems.
+
+For CAS (Complete Active Space) molecules where the Hamiltonian is
+defined only in an active-space subblock, the solver uses PySCF's
+``fci.direct_spin1.FCI`` on the active-space integrals directly,
+avoiding a full-molecule rebuild that would give the wrong energy or
+hang on large systems.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import time
+from math import comb
 from typing import Any
 
 from qvartools.hamiltonians.hamiltonian import Hamiltonian
@@ -23,6 +31,10 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
+#: Maximum Hilbert-space dimension for CAS FCI via PySCF before the
+#: solver gives up and returns ``energy=None``.
+_CAS_FCI_MAX_CONFIGS: int = 50_000_000
+
 
 class FCISolver(Solver):
     """Full configuration interaction solver.
@@ -32,12 +44,17 @@ class FCISolver(Solver):
     falls back to dense exact diagonalisation via
     :meth:`~qvartools.hamiltonians.hamiltonian.Hamiltonian.exact_ground_state`.
 
+    For CAS molecules (``mol_info["is_cas"] = True``), the solver uses
+    the active-space integrals directly instead of rebuilding the full
+    molecule, and returns ``energy=None`` when the CAS Hilbert space
+    exceeds 50 million configurations.
+
     Parameters
     ----------
     max_configs : int, optional
         Maximum number of configurations (Hilbert-space dimension) for
         which dense diagonalisation is attempted (default ``500_000``).
-        Systems exceeding this limit raise a ``RuntimeError`` when PySCF
+        Systems exceeding this limit return ``energy=None`` when PySCF
         is unavailable.
 
     Attributes
@@ -66,18 +83,19 @@ class FCISolver(Solver):
         hamiltonian : Hamiltonian
             The molecular Hamiltonian.
         mol_info : dict
-            Molecular metadata (must contain ``"name"``).
+            Molecular metadata.  For the PySCF path (non-CAS molecules),
+            must contain ``"geometry"`` (list of ``(atom, coord)`` tuples)
+            and ``"basis"`` (str); optionally ``"charge"`` and ``"spin"``.
+            For CAS molecules (``"is_cas"`` is ``True``), uses active-space
+            integrals from the Hamiltonian directly.  The ``"name"`` key is
+            used only for logging.
 
         Returns
         -------
         SolverResult
-            FCI energy result.
-
-        Raises
-        ------
-        RuntimeError
-            If the Hilbert-space dimension exceeds ``max_configs`` and
-            PySCF is not available.
+            FCI energy result.  ``energy`` is ``None`` when the
+            computation was skipped (e.g. CAS too large, dense fallback
+            exceeds ``max_configs``).
         """
         t_start = time.perf_counter()
 
@@ -85,18 +103,26 @@ class FCISolver(Solver):
             hamiltonian, mol_info
         )
 
-        if energy is None:
+        if energy is None and not metadata.get("_skip_dense_fallback", False):
             energy, diag_dim, converged, metadata = self._dense_fallback(hamiltonian)
 
         wall_time = time.perf_counter() - t_start
 
-        logger.info(
-            "FCISolver [%s]: energy=%.10f, dim=%d, time=%.2fs",
-            mol_info.get("name", "unknown"),
-            energy,
-            diag_dim,
-            wall_time,
-        )
+        if energy is not None:
+            logger.info(
+                "FCISolver [%s]: energy=%.10f, dim=%d, time=%.2fs",
+                mol_info.get("name", "unknown"),
+                energy,
+                diag_dim,
+                wall_time,
+            )
+        else:
+            logger.info(
+                "FCISolver [%s]: energy unavailable (reason=%s), time=%.2fs",
+                mol_info.get("name", "unknown"),
+                metadata.get("reason", "unknown"),
+                wall_time,
+            )
 
         return SolverResult(
             energy=energy,
@@ -112,6 +138,10 @@ class FCISolver(Solver):
     ) -> tuple:
         """Attempt FCI via PySCF.
 
+        For CAS molecules (``mol_info["is_cas"] = True``), uses the
+        active-space integrals directly with ``pyscf.fci.direct_spin1``
+        instead of rebuilding the full molecule.
+
         Parameters
         ----------
         hamiltonian : Hamiltonian
@@ -124,18 +154,31 @@ class FCISolver(Solver):
         tuple
             ``(energy, diag_dim, converged, metadata)`` or
             ``(None, 0, False, {})`` if PySCF is unavailable or the
-            Hamiltonian is not molecular.
+            Hamiltonian is not molecular.  For CAS molecules that are
+            too large, the metadata includes
+            ``"_skip_dense_fallback": True`` to prevent the dense
+            fallback from being attempted.
         """
         if not hasattr(hamiltonian, "integrals"):
             return None, 0, False, {}
 
+        integrals = hamiltonian.integrals
+        n_orb = integrals.n_orbitals
+        n_alpha = integrals.n_alpha
+        n_beta = integrals.n_beta
+        diag_dim = comb(n_orb, n_alpha) * comb(n_orb, n_beta)
+
+        # --- CAS molecule: use active-space integrals directly ---
+        if mol_info.get("is_cas", False):
+            return self._try_cas_fci(integrals, n_orb, n_alpha, n_beta, diag_dim)
+
+        # --- Standard molecule: rebuild from geometry ---
         try:
             from pyscf import fci, gto, scf
         except ImportError:
             logger.info("PySCF not available; falling back to dense FCI.")
             return None, 0, False, {}
 
-        integrals = hamiltonian.integrals
         geometry = mol_info.get("geometry", [])
         basis = mol_info.get("basis", "sto-3g")
         charge = mol_info.get("charge", 0)
@@ -155,14 +198,6 @@ class FCISolver(Solver):
         cisolver = fci.FCI(mf)
         e_fci, ci_vec = cisolver.kernel()
 
-        n_orb = integrals.n_orbitals
-        n_alpha = integrals.n_alpha
-        n_beta = integrals.n_beta
-
-        from math import comb
-
-        diag_dim = comb(n_orb, n_alpha) * comb(n_orb, n_beta)
-
         metadata: dict[str, Any] = {
             "pyscf_converged": mf.converged,
             "n_orbitals": n_orb,
@@ -170,7 +205,112 @@ class FCISolver(Solver):
             "n_beta": n_beta,
         }
 
-        return float(e_fci), diag_dim, True, metadata
+        return float(e_fci), diag_dim, bool(mf.converged), metadata
+
+    def _try_cas_fci(
+        self,
+        integrals: Any,
+        n_orb: int,
+        n_alpha: int,
+        n_beta: int,
+        diag_dim: int,
+    ) -> tuple:
+        """Run FCI on CAS (active-space) integrals directly.
+
+        Parameters
+        ----------
+        integrals : MolecularIntegrals
+            Active-space integrals (h1e, h2e, nuclear_repulsion).
+        n_orb : int
+            Number of active-space spatial orbitals.
+        n_alpha : int
+            Number of alpha electrons in the active space.
+        n_beta : int
+            Number of beta electrons in the active space.
+        diag_dim : int
+            Hilbert-space dimension ``C(n_orb, n_alpha) * C(n_orb, n_beta)``.
+
+        Returns
+        -------
+        tuple
+            ``(energy, diag_dim, converged, metadata)``.  Returns
+            ``energy=None`` when the CAS space is too large or PySCF
+            is unavailable.
+        """
+        # Guard: CAS Hilbert space too large for FCI
+        if diag_dim > _CAS_FCI_MAX_CONFIGS:
+            logger.info(
+                "CAS Hilbert space (%d configs) exceeds %d; skipping FCI.",
+                diag_dim,
+                _CAS_FCI_MAX_CONFIGS,
+            )
+            return (
+                None,
+                0,
+                False,
+                {
+                    "reason": "CAS too large for FCI",
+                    "hilbert_dim": diag_dim,
+                    "_skip_dense_fallback": True,
+                },
+            )
+
+        try:
+            from pyscf import fci as pyscf_fci
+        except ImportError:
+            logger.info("PySCF not available; cannot run CAS FCI.")
+            return (
+                None,
+                0,
+                False,
+                {
+                    "reason": "pyscf_unavailable",
+                },
+            )
+
+        h1e = integrals.h1e
+        h2e = integrals.h2e
+        e_core = integrals.nuclear_repulsion
+
+        cisolver = pyscf_fci.direct_spin1.FCI()
+        cisolver.conv_tol = 1e-12
+        cisolver.max_cycle = 300
+        cisolver.verbose = 0
+
+        # h2e is already in 4-index (n_orb, n_orb, n_orb, n_orb) form;
+        # PySCF's FCI kernel accepts this directly.
+        nelec = (n_alpha, n_beta)
+        e_fci, ci_vec = cisolver.kernel(h1e, h2e, n_orb, nelec)
+        e_fci += e_core
+
+        if not math.isfinite(e_fci):
+            logger.warning("CAS FCI returned non-finite energy: %s", e_fci)
+            return None, 0, False, {"reason": "non_finite_cas_fci"}
+        if hasattr(cisolver, "converged") and not cisolver.converged:
+            logger.warning(
+                "CAS FCI did not converge (max_cycle=%d)", cisolver.max_cycle
+            )
+            return None, 0, False, {"reason": "cas_fci_not_converged"}
+
+        metadata: dict[str, Any] = {
+            "cas_fci": True,
+            "n_orbitals": n_orb,
+            "n_alpha": n_alpha,
+            "n_beta": n_beta,
+        }
+
+        cas_converged = getattr(cisolver, "converged", True)
+
+        logger.info(
+            "CAS FCI: n_orb=%d, nelec=(%d, %d), dim=%d, energy=%.10f",
+            n_orb,
+            n_alpha,
+            n_beta,
+            diag_dim,
+            e_fci,
+        )
+
+        return float(e_fci), diag_dim, bool(cas_converged), metadata
 
     def _dense_fallback(self, hamiltonian: Hamiltonian) -> tuple:
         """Fall back to dense exact diagonalisation.
@@ -183,18 +323,26 @@ class FCISolver(Solver):
         Returns
         -------
         tuple
-            ``(energy, diag_dim, converged, metadata)``.
-
-        Raises
-        ------
-        RuntimeError
-            If the Hilbert-space dimension exceeds ``max_configs``.
+            ``(energy, diag_dim, converged, metadata)``.  Returns
+            ``(None, 0, False, ...)`` when the Hilbert dimension
+            exceeds ``max_configs``.
         """
         diag_dim = hamiltonian.hilbert_dim
         if diag_dim > self.max_configs:
-            raise RuntimeError(
-                f"Dense FCI requires {diag_dim} configurations, which exceeds "
-                f"max_configs={self.max_configs}. Install PySCF for large systems."
+            logger.info(
+                "Dense FCI requires %d configs (max_configs=%d); skipping.",
+                diag_dim,
+                self.max_configs,
+            )
+            return (
+                None,
+                0,
+                False,
+                {
+                    "reason": "hilbert_dim_exceeded",
+                    "hilbert_dim": diag_dim,
+                    "max_configs": self.max_configs,
+                },
             )
 
         logger.info("Using dense diagonalisation (dim=%d).", diag_dim)

@@ -310,7 +310,10 @@ def main() -> None:
     hamiltonian, mol_info = get_molecule(molecule, device=device)
     fci_result = FCISolver().solve(hamiltonian, mol_info)
     exact_energy = fci_result.energy
-    print(f"  Exact (FCI) energy: {exact_energy:.10f} Ha")
+    if exact_energy is not None:
+        print(f"  Exact (FCI) energy: {exact_energy:.10f} Ha")
+    else:
+        print("  FCI reference unavailable for this system.")
     print(f"{'=' * 80}\n")
 
     # Filter pipelines
@@ -344,7 +347,7 @@ def main() -> None:
         error_mha = result.get("error_mha")
         wall_time = result.get("wall_time", elapsed)
 
-        if energy is not None and error_mha is None:
+        if energy is not None and error_mha is None and exact_energy is not None:
             error_mha = (energy - exact_energy) * 1000.0
 
         status_icon = {
@@ -381,7 +384,10 @@ def main() -> None:
     # Print summary table
     print(f"\n{'=' * 100}")
     print(f"  COMPARISON TABLE: {molecule.upper()}")
-    print(f"  Exact (FCI) energy: {exact_energy:.10f} Ha")
+    if exact_energy is not None:
+        print(f"  Exact (FCI) energy: {exact_energy:.10f} Ha")
+    else:
+        print("  Exact (FCI) energy: N/A")
     print(f"  Chemical accuracy threshold: {CHEMICAL_ACCURACY_MHA} mHa")
     print(f"{'=' * 100}")
     print(
@@ -412,14 +418,22 @@ def main() -> None:
         best = min(ok_results, key=lambda r: r["energy"])
         fastest = min(ok_results, key=lambda r: r["wall_time"] or float("inf"))
         n_chem_acc = sum(
-            1 for r in ok_results if abs(r["error_mha"] or 999) < CHEMICAL_ACCURACY_MHA
+            1
+            for r in ok_results
+            if r["error_mha"] is not None
+            and abs(r["error_mha"]) < CHEMICAL_ACCURACY_MHA
         )
 
         print(f"\n  Completed: {len(ok_results)}/{len(results)}")
         print(f"  Chemical accuracy: {n_chem_acc}/{len(ok_results)}")
-        print(
-            f"  Best energy: {best['name']} ({best['energy']:.10f} Ha, {best['error_mha']:.4f} mHa)"
-        )
+        if best["error_mha"] is not None:
+            print(
+                f"  Best energy: {best['name']} ({best['energy']:.10f} Ha, {best['error_mha']:.4f} mHa)"
+            )
+        else:
+            print(
+                f"  Best energy: {best['name']} ({best['energy']:.10f} Ha, error: N/A)"
+            )
         print(f"  Fastest: {fastest['name']} ({fastest['wall_time']:.1f}s)")
 
     failed = [r for r in results if r["status"] != "OK"]

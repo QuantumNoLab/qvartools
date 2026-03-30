@@ -744,6 +744,48 @@ Efficient set-difference deduplication of configuration tensors.
 
 Basis expansion via Hamiltonian connections (union of all connected states).
 
+### `split_spin_strings`
+
+Split full configurations into unique alpha (spin-up) and beta (spin-down) occupation strings.
+
+### `cartesian_product_configs`
+
+Generate all alpha×beta pairs from two sets of spin strings, producing a full subspace expansion.
+
 ### `hash_config`
 
 Fast integer hash for a single configuration tensor.
+
+---
+
+## `qvartools.methods` (End-to-End Pipelines)
+
+### `run_hi_nqs_sqd(hamiltonian, mol_info, config=None, *, initial_basis=None)`
+
+Iterative HI+NQS+SQD pipeline with self-consistent eigenvector feedback. Config: `HINQSSQDConfig`. The `initial_basis` kwarg accepts a `torch.Tensor` of shape `(n_configs, n_qubits)` to warm-start the cumulative basis.
+
+### `run_hi_nqs_skqd(hamiltonian, mol_info, config=None, *, initial_basis=None)`
+
+Iterative HI+NQS+SKQD pipeline with Krylov expansion. Config: `HINQSSKQDConfig`. Same `initial_basis` warm-start pattern.
+
+### `run_nqs_sqd` / `run_nqs_skqd`
+
+Non-iterative (single-pass) NQS+SQD and NQS+SKQD pipelines. Configs: `NQSSQDConfig`, `NQSSKQDConfig`.
+
+---
+
+## `qvartools._ext` (Experimental GPU Extensions)
+
+Optional modules requiring external binaries. Import-guarded; core functionality is unaffected when deps are missing.
+
+### `sbd_subprocess.sbd_available() -> bool`
+
+Check if the `sbd` binary and `mpirun` are both available on the system.
+
+### `sbd_subprocess.sbd_diagonalize(h1e, h2e, n_orb, n_elec, nuclear_repulsion, alpha_strings, beta_strings, ...) -> float`
+
+Run GPU-native Selected Basis Diagonalisation via the external `sbd` binary (r-ccs-cms/sbd, ADR-003 Phase 1). Returns ground-state energy.
+
+### `cudaq_vqe.run_cudaq_vqe(geometry, basis, method, ...) -> dict`
+
+Run VQE or ADAPT-VQE using CUDA-QX Solvers. Supports gate fusion (`gate_fusion` param), active-space reduction (`nele_cas`/`norb_cas`), and target selection. Returns dict with keys: `energy`, `fci_energy`, `hf_energy`, `error_mha`, `wall_time`, `n_params`, `iterations`, `method`, `n_qubits`, `n_electrons`, `optimal_parameters`.

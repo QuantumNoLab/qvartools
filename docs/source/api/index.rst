@@ -14,4 +14,6 @@ Complete reference for every public module, class, and function in qvartools.
    solvers
    samplers
    molecules
+   methods
+   extensions
    pipeline

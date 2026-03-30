@@ -127,6 +127,7 @@ qvartools/
   samplers/       Configuration samplers (NF, Trotter, CUDA-Q)
   molecules/      Molecular system registry and factory functions
   methods/        End-to-end method pipelines (HI-NQS-SQD, HI-NQS-SKQD)
+  _ext/           GPU extensions (sbd subprocess, CUDA-QX VQE/ADAPT-VQE)
   _utils/         Internal utilities (caching, GPU helpers, format conversion)
   pipeline.py     Top-level orchestrator tying all stages together
 ```

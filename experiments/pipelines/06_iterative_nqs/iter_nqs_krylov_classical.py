@@ -80,7 +80,10 @@ def main() -> None:
     # --- Exact reference ---
     fci_result = FCISolver().solve(hamiltonian, mol_info)
     exact_energy = fci_result.energy
-    print(f"Exact (FCI) energy: {exact_energy:.10f} Ha\n")
+    if exact_energy is not None:
+        print(f"Exact (FCI) energy: {exact_energy:.10f} Ha\n")
+    else:
+        print("FCI reference unavailable for this system.\n")
 
     # --- Configure ---
     config_obj = HINQSSKQDConfig(
@@ -107,20 +110,36 @@ def main() -> None:
         print("  " + "-" * 50)
 
         for i, energy in enumerate(energies):
-            err_mha = (energy - exact_energy) * 1000.0
+            err_mha = (
+                (energy - exact_energy) * 1000.0 if exact_energy is not None else None
+            )
             basis = basis_sizes[i] if i < len(basis_sizes) else 0
-            print(f"  {i + 1:>4}  {energy:>16.10f}  {err_mha:>12.4f}  {basis:>8d}")
+            print(
+                f"  {i + 1:>4}  {energy:>16.10f}  {err_mha:>12.4f}  {basis:>8d}"
+                if err_mha is not None
+                else f"  {i + 1:>4}  {energy:>16.10f}  {'N/A':>12}  {basis:>8d}"
+            )
 
     # --- Final summary ---
     print("\n" + "=" * 60)
     print("PIPELINE 06a: ITERATIVE NQS + KRYLOV (CLASSICAL) RESULTS")
     print("=" * 60)
-    error_mha = (result.energy - exact_energy) * 1000.0
-    within = "YES" if abs(error_mha) < CHEMICAL_ACCURACY_MHA else "NO"
+    error_mha = (
+        (result.energy - exact_energy) * 1000.0 if exact_energy is not None else None
+    )
+    within = (
+        "YES"
+        if (error_mha is not None and abs(error_mha) < CHEMICAL_ACCURACY_MHA)
+        else ("NO" if error_mha is not None else "N/A")
+    )
     print(f"Best energy   : {result.energy:.10f} Ha")
-    print(f"Exact energy  : {exact_energy:.10f} Ha")
-    print(f"Error         : {error_mha:.4f} mHa")
-    print(f"Chemical acc. : {within} (threshold = {CHEMICAL_ACCURACY_MHA} mHa)")
+    if exact_energy is not None:
+        print(f"Exact energy  : {exact_energy:.10f} Ha")
+    else:
+        print("Exact energy  : N/A")
+    if error_mha is not None:
+        print(f"Error         : {error_mha:.4f} mHa")
+        print(f"Chemical acc. : {within} (threshold = {CHEMICAL_ACCURACY_MHA} mHa)")
     n_iters = result.metadata.get(
         "n_iterations_run", result.metadata.get("n_iterations", 0)
     )

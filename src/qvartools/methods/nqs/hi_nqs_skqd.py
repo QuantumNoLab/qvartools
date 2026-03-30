@@ -22,6 +22,7 @@ run_hi_nqs_skqd
 from __future__ import annotations
 
 import logging
+import math
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -224,6 +225,12 @@ def run_hi_nqs_skqd(
     -------
     SolverResult
         Energy, timing, convergence, and iteration metadata.
+
+    Raises
+    ------
+    ValueError
+        If ``mol_info`` is missing required keys, or if ``initial_basis``
+        has wrong shape, non-binary values, or floating-point dtype.
     """
     cfg = config or HINQSSKQDConfig()
 
@@ -269,6 +276,11 @@ def run_hi_nqs_skqd(
 
     # --- Cumulative basis (warm-start from initial_basis if provided) ---
     if initial_basis is not None:
+        if initial_basis.is_floating_point():
+            raise ValueError(
+                f"initial_basis must be integer dtype (binary occupations), "
+                f"got {initial_basis.dtype}"
+            )
         cumulative_basis = initial_basis.to(dtype=torch.long, device=device)
         if cumulative_basis.ndim != 2 or cumulative_basis.shape[1] != n_qubits:
             raise ValueError(
@@ -365,6 +377,11 @@ def run_hi_nqs_skqd(
                 e_b, coeffs_b, occs_b = gpu_solve_fermion(batch_configs, hamiltonian)
 
             e_b = float(e_b)
+            if not math.isfinite(e_b):
+                logger.warning(
+                    "Non-finite energy %.4e in batch %d, skipping", e_b, _batch_idx
+                )
+                continue
             batch_energies.append(e_b)
             latest_occs = occs_b
 
@@ -373,7 +390,14 @@ def run_hi_nqs_skqd(
                 best_coeffs = np.asarray(coeffs_b)
                 best_batch_configs = batch_configs
 
-        iter_energy = float(np.min(batch_energies))
+        if not batch_energies:
+            logger.warning(
+                "All batches produced non-finite energies at iteration %d",
+                iteration + 1,
+            )
+            iter_energy = float("inf")
+        else:
+            iter_energy = float(np.min(batch_energies))
         energy_history.append(iter_energy)
         basis_size_history.append(int(cumulative_basis.shape[0]))
         best_energy = min(best_energy, iter_energy)

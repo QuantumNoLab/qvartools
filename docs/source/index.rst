@@ -52,6 +52,12 @@ Key capabilities:
 
    developer_guide/index
 
+.. toctree::
+   :maxdepth: 1
+   :caption: About
+
+   about
+
 Indices and tables
 ==================
 

@@ -10,10 +10,12 @@ for larger ones, and CuPy sparse eigsh if available.
 from __future__ import annotations
 
 import logging
+import math
 import warnings
 from typing import Any
 
 import numpy as np
+import scipy.sparse
 import torch
 from scipy.sparse.linalg import eigsh as scipy_eigsh
 
@@ -116,18 +118,33 @@ def gpu_solve_fermion(
         occ = compute_occupancies(configs.numpy(), v0, n_orb)
         return e, v0, occ
 
-    # Build projected Hamiltonian
-    H_proj = hamiltonian.matrix_elements_fast(configs)
-    H_np = H_proj.detach().cpu().numpy()
-    if np.iscomplexobj(H_np):
-        H_np = H_np.real
-    H_np = H_np.astype(np.float64)
-    H_np = 0.5 * (H_np + H_np.T)
-
-    if n <= min(SPARSE_THRESHOLD, max_dense):
-        E0, v0 = _dense_diag(H_np)
+    # Build projected Hamiltonian — use sparse path for large bases
+    if n > SPARSE_H_THRESHOLD and hasattr(hamiltonian, "build_sparse_hamiltonian"):
+        logger.info(
+            "Using build_sparse_hamiltonian for %d configs (> %d threshold)",
+            n,
+            SPARSE_H_THRESHOLD,
+        )
+        H_sp = hamiltonian.build_sparse_hamiltonian(configs)
+        # build_sparse_hamiltonian already returns a symmetric matrix
+        # (lower + lower^T - diag), so no extra symmetrization needed.
+        H_csr = H_sp.tocsr().astype(np.float64)
+        E0, v0 = _sparse_diag(H_csr)
     else:
-        E0, v0 = _iterative_diag(H_np)
+        H_proj = hamiltonian.matrix_elements_fast(configs)
+        H_np = H_proj.detach().cpu().numpy()
+        if np.iscomplexobj(H_np):
+            H_np = H_np.real
+        H_np = H_np.astype(np.float64)
+        H_np = 0.5 * (H_np + H_np.T)
+
+        if n <= min(SPARSE_THRESHOLD, max_dense):
+            E0, v0 = _dense_diag(H_np)
+        else:
+            E0, v0 = _iterative_diag(H_np)
+
+    if not math.isfinite(E0):
+        raise RuntimeError(f"Non-finite eigenvalue {E0} from diagonalization")
 
     occ = compute_occupancies(configs.numpy(), v0, n_orb)
     return E0, v0, occ
@@ -146,6 +163,45 @@ def _dense_diag(H_np: np.ndarray) -> tuple[float, np.ndarray]:
             pass
 
     eigenvalues, eigenvectors = np.linalg.eigh(H_np)
+    return float(eigenvalues[0]), eigenvectors[:, 0]
+
+
+def _sparse_diag(
+    H_csr: scipy.sparse.csr_matrix,
+) -> tuple[float, np.ndarray]:
+    """Sparse diagonalization via scipy.sparse.linalg.eigsh.
+
+    Parameters
+    ----------
+    H_csr : scipy.sparse.csr_matrix
+        Sparse Hamiltonian in CSR format.
+
+    Returns
+    -------
+    E0 : float
+        Lowest eigenvalue.
+    v0 : np.ndarray
+        Corresponding eigenvector, shape ``(n,)``.
+    """
+    n = H_csr.shape[0]
+
+    # 1x1 matrix: return the single diagonal element directly
+    if n <= 1:
+        diag = H_csr.diagonal()
+        return float(diag[0]), np.array([1.0])
+
+    if _CUPY_AVAILABLE:
+        try:
+            H_gpu = cupy_csr(H_csr)
+            eigenvalues, eigenvectors = cupy_eigsh(H_gpu, k=1, which="SA")
+            E0 = float(cp.asnumpy(eigenvalues[0]))
+            v0 = cp.asnumpy(eigenvectors[:, 0])
+            del H_gpu
+            return E0, v0
+        except Exception as e:
+            warnings.warn(f"CuPy sparse eigsh failed ({e}), falling back to SciPy")
+
+    eigenvalues, eigenvectors = scipy_eigsh(H_csr, k=min(1, n - 1), which="SA")
     return float(eigenvalues[0]), eigenvectors[:, 0]
 
 

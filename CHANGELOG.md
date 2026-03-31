@@ -13,12 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: Default `subspace_mode` changed from `"skqd"` to `"classical_krylov"`
 - `subspace_mode="skqd"` now routes to `QuantumCircuitSKQD` (real CUDA-Q SKQD)
 - Old class names kept as deprecated aliases until v0.1.0
+- `matrix_elements_fast()` dense config limit raised from 10K to 50K
 - `FCISolver._dense_fallback()` returns `None` instead of raising `RuntimeError` for large Hilbert spaces
 
 ### Added
 - `compute_molecular_integrals` now accepts `cas` and `casci` parameters for CAS active-space reduction
 - 12 new CAS molecules in registry: N₂-CAS(10,12/15/17/20/26), Cr₂ + variants, Benzene CAS(6,15)
 - `_compute_cas_integrals` helper with auto-CASCI fallback for large active spaces
+- `MolecularHamiltonian.build_sparse_hamiltonian()` for O(nnz) sparse H construction
+- Sparse eigenvalue dispatch in `gpu_solve_fermion` for basis > 8K configs
 - CAS-aware `FCISolver` using active-space integrals directly (no full molecule rebuild)
 - FCI-free pipeline support: 25 experiment scripts gracefully handle `exact_energy=None`
 - `TransformerAsNQS` adapter: enables `AutoregressiveTransformer` in NF training pipeline

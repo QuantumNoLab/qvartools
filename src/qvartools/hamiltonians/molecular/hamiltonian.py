@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 
 import numpy as np
+import scipy.sparse
 import torch
 
 from qvartools.hamiltonians.hamiltonian import Hamiltonian
@@ -159,6 +160,10 @@ class MolecularHamiltonian(Hamiltonian):
         self._precompute_excitation_indices()
 
         # Integer hashing helpers
+        # _use_split_hash is only needed for >=64 spin-orbitals (32+ spatial
+        # orbitals) to avoid int64 overflow.  All current molecules in the
+        # registry use fewer than 64 spin-orbitals, so in practice this path
+        # is not exercised by the molecule registry.
         self._use_split_hash = num_sites >= 64
 
         logger.info(
@@ -750,17 +755,20 @@ class MolecularHamiltonian(Hamiltonian):
         Raises
         ------
         MemoryError
-            If ``n_configs > 10000`` (dense matrix would be too large).
+            If ``n_configs > 50000`` (dense matrix would be too large).
+            For bases between 10K and 50K, consider using
+            :meth:`build_sparse_hamiltonian` instead for lower memory usage.
         """
         configs = configs.to(self.device)
         n_configs = configs.shape[0]
 
-        if n_configs > 10000:
+        if n_configs > 50000:
             mem_gb = n_configs**2 * 8 / 1e9
             raise MemoryError(
                 f"matrix_elements_fast() refused {n_configs}x{n_configs} "
-                f"dense matrix ({mem_gb:.1f} GB). Use sparse methods for "
-                f"systems with >10000 configs."
+                f"dense matrix ({mem_gb:.1f} GB). Use "
+                f"build_sparse_hamiltonian() or sparse methods for "
+                f"systems with >50000 configs."
             )
 
         H = torch.zeros(n_configs, n_configs, dtype=torch.float64, device=self.device)
@@ -811,6 +819,108 @@ class MolecularHamiltonian(Hamiltonian):
             H[j, final_i] = final_vals
 
         return H
+
+    # ------------------------------------------------------------------
+    # Sparse Hamiltonian construction
+    # ------------------------------------------------------------------
+
+    def build_sparse_hamiltonian(
+        self, configs: torch.Tensor
+    ) -> scipy.sparse.coo_matrix:
+        """Build a sparse projected Hamiltonian in COO format.
+
+        Iterates over each configuration, calls :meth:`get_connections` to
+        find off-diagonal matrix elements, and assembles a
+        ``scipy.sparse.coo_matrix``.  This uses O(nnz) memory instead of
+        O(n^2), making it suitable for bases with 10K--50K+ configurations.
+
+        Parameters
+        ----------
+        configs : torch.Tensor
+            Basis configurations, shape ``(n_configs, num_sites)``.
+
+        Returns
+        -------
+        scipy.sparse.coo_matrix
+            Hermitian sparse matrix of shape ``(n_configs, n_configs)``,
+            dtype ``float64``.
+
+        Raises
+        ------
+        ValueError
+            If ``configs`` is empty (zero rows).
+
+        Examples
+        --------
+        >>> H_sp = hamiltonian.build_sparse_hamiltonian(configs)
+        >>> E0 = scipy.sparse.linalg.eigsh(H_sp, k=1, which="SA")[0][0]
+        """
+        configs = configs.to(self.device)
+        n_configs = configs.shape[0]
+
+        if n_configs == 0:
+            raise ValueError("Empty basis — cannot build sparse Hamiltonian")
+
+        # --- Diagonal elements ---
+        diag_vals = self.diagonal_elements_batch(configs).detach().cpu().numpy()
+
+        # Initialise COO data lists with diagonal
+        rows: list[int] = list(range(n_configs))
+        cols: list[int] = list(range(n_configs))
+        data: list[float] = diag_vals.tolist()
+
+        # --- Hash-based index lookup (same approach as matrix_elements_fast) ---
+        basis_hashes = self._config_hash_batch(configs)  # (n_configs,)
+        sorted_hashes, sort_perm = torch.sort(basis_hashes)
+        sorted_hashes_cpu = sorted_hashes.cpu()
+        sort_perm_cpu = sort_perm.cpu()
+
+        # Pre-move configs to CPU once for Numba/Slater-Condon calls
+        configs_cpu = configs.detach().cpu()
+
+        for j in range(n_configs):
+            connected, elements = self.get_connections(configs_cpu[j])
+            if connected.numel() == 0:
+                continue
+
+            # Hash all connected configs and look them up in the basis
+            conn_hashes = self._config_hash_batch(connected)
+            positions = torch.searchsorted(sorted_hashes_cpu, conn_hashes)
+            positions = positions.clamp(max=n_configs - 1)
+
+            matched_mask = sorted_hashes_cpu[positions] == conn_hashes
+            if not matched_mask.any():
+                continue
+
+            orig_indices = sort_perm_cpu[positions[matched_mask]]
+            matched_vals = elements[matched_mask]
+
+            # Filter out self-matches (diagonal already handled)
+            not_self = orig_indices != j
+            if not not_self.any():
+                continue
+
+            final_i = orig_indices[not_self].numpy()
+            final_vals = matched_vals[not_self].numpy().astype(np.float64)
+
+            # Only store lower-triangle entries (i > j) to avoid duplicates.
+            # Symmetry is enforced below by adding the transpose.
+            lower_mask = final_i > j
+            if lower_mask.any():
+                rows.extend(final_i[lower_mask].tolist())
+                cols.extend([j] * int(lower_mask.sum()))
+                data.extend(final_vals[lower_mask].tolist())
+
+        # Build lower-triangle COO (diagonal + strictly lower)
+        H_lower = scipy.sparse.coo_matrix(
+            (np.array(data, dtype=np.float64), (np.array(rows), np.array(cols))),
+            shape=(n_configs, n_configs),
+        )
+        # Full symmetric matrix = lower + lower^T - diag (diag appears in both)
+        H_full = H_lower + H_lower.T - scipy.sparse.diags(diag_vals, format="coo")
+        H_full = H_full.tocoo()
+        H_full.eliminate_zeros()
+        return H_full
 
     # ------------------------------------------------------------------
     # Utility methods

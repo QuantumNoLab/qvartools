@@ -34,6 +34,11 @@ from qvartools._utils.formatting.bitstring_format import (
     vectorized_dedup,
 )
 from qvartools._utils.gpu.diagnostics import gpu_solve_fermion
+from qvartools.methods.nqs._pt2_helpers import (
+    compute_pt2_scores,
+    compute_temperature,
+    evict_by_coefficient,
+)
 from qvartools.nqs.transformer.autoregressive import AutoregressiveTransformer
 from qvartools.solvers.solver import SolverResult
 
@@ -377,15 +382,27 @@ def run_hi_nqs_sqd(
     energy_history: list[float] = []
     best_energy = float("inf")
     converged = False
+    converge_count = 0
 
     for iteration in range(cfg.n_iterations):
         logger.info("HI+NQS+SQD iteration %d / %d", iteration + 1, cfg.n_iterations)
 
+        # --- Temperature (annealing when PT2 is on, fixed otherwise) ---
+        if cfg.use_pt2_selection:
+            temp = compute_temperature(
+                iteration,
+                cfg.n_iterations,
+                cfg.initial_temperature,
+                cfg.final_temperature,
+            )
+        else:
+            temp = cfg.temperature
+
         # --- NQS sampling ---
         with torch.no_grad():
-            new_configs = nqs.sample(
-                cfg.n_samples_per_iter, temperature=cfg.temperature
-            ).to(device)
+            new_configs = nqs.sample(cfg.n_samples_per_iter, temperature=temp).to(
+                device
+            )
 
         # Deduplicate against cumulative basis (numpy for vectorized_dedup)
         if cumulative_basis.shape[0] > 0:
@@ -395,6 +412,25 @@ def run_hi_nqs_sqd(
             unique_new = torch.from_numpy(deduped_np).long().to(device)
         else:
             unique_new = torch.unique(new_configs, dim=0)
+
+        # --- PT2 filtering (only when enabled and we have a prior eigenvector) ---
+        if (
+            cfg.use_pt2_selection
+            and unique_new.shape[0] > 0
+            and best_energy < float("inf")
+        ):
+            scores = compute_pt2_scores(
+                unique_new, cumulative_basis, best_coeffs, hamiltonian, best_energy
+            )
+            n_keep = min(cfg.pt2_top_k, unique_new.shape[0])
+            top_indices = np.argsort(scores)[::-1][:n_keep]
+            unique_new = unique_new[top_indices]
+            logger.info(
+                "  PT2 filtered: %d → %d configs (top_k=%d)",
+                len(scores),
+                n_keep,
+                cfg.pt2_top_k,
+            )
 
         cumulative_basis = torch.cat([cumulative_basis, unique_new], dim=0)
         cumulative_basis = torch.unique(cumulative_basis, dim=0)
@@ -467,6 +503,18 @@ def run_hi_nqs_sqd(
         energy_history.append(iter_energy)
         best_energy = min(best_energy, iter_energy)
 
+        # --- Coefficient-based eviction (when PT2 is on) ---
+        if (
+            cfg.use_pt2_selection
+            and best_coeffs is not None
+            and best_batch_configs is not None
+            and best_batch_configs.shape[0] > cfg.max_basis_size
+        ):
+            cumulative_basis, best_coeffs = evict_by_coefficient(
+                best_batch_configs, best_coeffs, cfg.max_basis_size
+            )
+            logger.info("  evicted to %d configs", cumulative_basis.shape[0])
+
         # --- Update occupancies ---
         if isinstance(latest_occs, tuple) and len(latest_occs) == 2:
             occ_alpha = np.clip(np.asarray(latest_occs[0], dtype=np.float64), 0.0, 1.0)
@@ -481,6 +529,10 @@ def run_hi_nqs_sqd(
                 n_orb,
                 lr=cfg.nqs_lr,
                 epochs=cfg.nqs_train_epochs,
+                teacher_weight=cfg.teacher_weight,
+                energy_weight=cfg.energy_weight,
+                entropy_weight=cfg.entropy_weight,
+                hamiltonian=hamiltonian,
             )
 
         logger.info(
@@ -490,13 +542,26 @@ def run_hi_nqs_sqd(
             cumulative_basis.shape[0],
         )
 
-        # --- Convergence ---
+        # --- Convergence (with window when PT2 is on) ---
         if len(energy_history) >= 2:
             delta = abs(energy_history[-1] - energy_history[-2])
             if delta < cfg.energy_tol:
-                converged = True
-                logger.info("  converged: |dE|=%.2e", delta)
-                break
+                if cfg.use_pt2_selection:
+                    converge_count += 1
+                    if converge_count >= cfg.convergence_window:
+                        converged = True
+                        logger.info(
+                            "  converged: |dE|=%.2e (window=%d)",
+                            delta,
+                            cfg.convergence_window,
+                        )
+                        break
+                else:
+                    converged = True
+                    logger.info("  converged: |dE|=%.2e", delta)
+                    break
+            else:
+                converge_count = 0
 
     wall_time = time.perf_counter() - t_start
 

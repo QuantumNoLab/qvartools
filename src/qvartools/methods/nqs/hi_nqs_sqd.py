@@ -423,7 +423,7 @@ def run_hi_nqs_sqd(
                 unique_new, cumulative_basis, best_coeffs, hamiltonian, best_energy
             )
             n_keep = min(cfg.pt2_top_k, unique_new.shape[0])
-            top_indices = np.argsort(scores)[::-1][:n_keep]
+            top_indices = np.argsort(scores)[::-1][:n_keep].copy()
             unique_new = unique_new[top_indices]
             logger.info(
                 "  PT2 filtered: %d → %d configs (top_k=%d)",

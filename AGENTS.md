@@ -268,8 +268,9 @@ qvartools/
 │   │   └── nqs/
 │   │       ├── nqs_sqd.py        # NQSSQDConfig, run_nqs_sqd
 │   │       ├── nqs_skqd.py       # NQSSKQDConfig, run_nqs_skqd
-│   │       ├── hi_nqs_sqd.py     # HINQSSQDConfig, run_hi_nqs_sqd (initial_basis warm-start)
-│   │       └── hi_nqs_skqd.py    # HINQSSKQDConfig, run_hi_nqs_skqd (initial_basis warm-start)
+│   │       ├── hi_nqs_sqd.py     # HINQSSQDConfig, run_hi_nqs_sqd (initial_basis, PT2 selection)
+│   │       ├── hi_nqs_skqd.py    # HINQSSKQDConfig, run_hi_nqs_skqd (initial_basis warm-start)
+│   │       └── _pt2_helpers.py   # compute_pt2_scores, evict_by_coefficient, compute_temperature
 │   │
 │   └── _utils/                   # Internal utilities
 │       ├── scaling/

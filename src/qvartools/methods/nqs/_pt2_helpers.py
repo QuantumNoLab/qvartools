@@ -151,7 +151,7 @@ def evict_by_coefficient(
 
     # Sort by |c_i|² descending, keep top max_size, then re-sort by index
     importance = np.abs(coeffs) ** 2
-    top_indices = np.argsort(importance)[::-1][:max_size]
+    top_indices = np.argsort(importance)[::-1][:max_size].copy()
     top_indices_sorted = np.sort(top_indices)
 
     return basis[top_indices_sorted], coeffs[top_indices_sorted]

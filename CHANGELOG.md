@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sparse eigenvalue dispatch in `gpu_solve_fermion` for basis > 8K configs
 - CAS-aware `FCISolver` using active-space integrals directly (no full molecule rebuild)
 - FCI-free pipeline support: 25 experiment scripts gracefully handle `exact_energy=None`
+- PT2 configuration selection for HI+NQS+SQD (`use_pt2_selection=True`, ADR-005)
+- `_pt2_helpers.py`: EN-PT2 scoring, ASCI coefficient eviction, temperature annealing
+- 3-term NQS teacher loss (teacher KL + energy REINFORCE + entropy)
+- CIPSI sparse fallback for basis > 10K via `build_sparse_hamiltonian`
 - `TransformerAsNQS` adapter: enables `AutoregressiveTransformer` in NF training pipeline
 - `NQSWithSampling` adapter: enables any `NeuralQuantumState` in HI training pipeline
 - `qvartools._logging` module with `configure_logging()` and `get_logger()`

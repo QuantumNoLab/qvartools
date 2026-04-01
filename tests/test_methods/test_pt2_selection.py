@@ -212,3 +212,76 @@ class TestComputeTemperature:
             iteration=20, max_iterations=10, t_init=2.0, t_final=0.2
         )
         assert t == pytest.approx(0.2)
+
+
+# ---------------------------------------------------------------------------
+# P2: 3-term loss tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.pyscf
+class TestTrainNqsTeacher3TermLoss:
+    """Test enhanced _train_nqs_teacher with 3-term loss."""
+
+    def test_accepts_weight_params(self, h2_hamiltonian):
+        """_train_nqs_teacher should accept teacher/energy/entropy weights."""
+        from qvartools.methods.nqs.hi_nqs_sqd import _train_nqs_teacher
+        from qvartools.nqs.transformer.autoregressive import AutoregressiveTransformer
+
+        ham = h2_hamiltonian
+        n_orb = ham.integrals.n_orbitals
+        nqs = AutoregressiveTransformer(
+            n_orbitals=n_orb,
+            n_alpha=ham.integrals.n_alpha,
+            n_beta=ham.integrals.n_beta,
+            embed_dim=16,
+            n_heads=2,
+            n_layers=1,
+        )
+        configs = ham.get_hf_state().unsqueeze(0)
+        coeffs = np.array([1.0])
+
+        # Should accept the new weight parameters without error
+        losses = _train_nqs_teacher(
+            nqs,
+            configs,
+            coeffs,
+            n_orb,
+            lr=1e-3,
+            epochs=2,
+            teacher_weight=1.0,
+            energy_weight=0.1,
+            entropy_weight=0.05,
+            hamiltonian=ham,
+        )
+        assert len(losses) == 2
+        assert all(isinstance(v, float) for v in losses)
+
+    def test_backward_compat_defaults(self, h2_hamiltonian):
+        """Without new kwargs, behavior is unchanged (teacher-only loss)."""
+        from qvartools.methods.nqs.hi_nqs_sqd import _train_nqs_teacher
+        from qvartools.nqs.transformer.autoregressive import AutoregressiveTransformer
+
+        ham = h2_hamiltonian
+        n_orb = ham.integrals.n_orbitals
+        nqs = AutoregressiveTransformer(
+            n_orbitals=n_orb,
+            n_alpha=ham.integrals.n_alpha,
+            n_beta=ham.integrals.n_beta,
+            embed_dim=16,
+            n_heads=2,
+            n_layers=1,
+        )
+        configs = ham.get_hf_state().unsqueeze(0)
+        coeffs = np.array([1.0])
+
+        # Original signature still works (no new kwargs)
+        losses = _train_nqs_teacher(
+            nqs,
+            configs,
+            coeffs,
+            n_orb,
+            lr=1e-3,
+            epochs=2,
+        )
+        assert len(losses) == 2

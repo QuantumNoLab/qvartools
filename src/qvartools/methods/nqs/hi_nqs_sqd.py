@@ -167,11 +167,22 @@ def _train_nqs_teacher(
     n_orb: int,
     lr: float,
     epochs: int,
+    *,
+    teacher_weight: float = 1.0,
+    energy_weight: float = 0.0,
+    entropy_weight: float = 0.0,
+    hamiltonian: Any = None,
 ) -> list[float]:
     """Train NQS using eigenvector coefficients as teacher signal.
 
-    Minimises the KL divergence between the teacher distribution
-    ``p_teacher(x) = |c_x|^2`` and the NQS distribution.
+    Minimises a weighted combination of three loss terms:
+
+    - **Teacher** (KL divergence): ``- sum_x p_teacher(x) * log q(x)``
+    - **Energy** (REINFORCE): ``sum_x p_teacher(x) * advantage(x) * log q(x)``
+    - **Entropy**: ``mean(log q(x))``
+
+    where ``p_teacher(x) = |c_x|^2 / Z`` (full joint distribution, NOT
+    α/β marginals) and ``advantage(x) = H_xx - E_0`` (diagonal energy).
 
     Parameters
     ----------
@@ -187,6 +198,15 @@ def _train_nqs_teacher(
         Learning rate.
     epochs : int
         Training epochs.
+    teacher_weight : float, optional
+        Weight for the KL teacher term (default ``1.0``).
+    energy_weight : float, optional
+        Weight for the REINFORCE energy term (default ``0.0``).
+        Requires ``hamiltonian`` to be provided.
+    entropy_weight : float, optional
+        Weight for the entropy regularisation term (default ``0.0``).
+    hamiltonian : Hamiltonian or None, optional
+        Required when ``energy_weight > 0`` (for diagonal elements).
 
     Returns
     -------
@@ -195,7 +215,7 @@ def _train_nqs_teacher(
     """
     device = next(nqs.parameters()).device
 
-    # Build teacher distribution: p(x) = |c_x|^2 / Z
+    # Build teacher distribution: p(x) = |c_x|^2 / Z (full joint)
     weights = np.abs(coeffs) ** 2
     total = weights.sum()
     if total > 0:
@@ -206,6 +226,20 @@ def _train_nqs_teacher(
     alpha = configs_dev[:, :n_orb]
     beta = configs_dev[:, n_orb:]
 
+    # Precompute energy advantage if needed
+    advantage_t: torch.Tensor | None = None
+    if energy_weight > 0 and hamiltonian is not None:
+        with torch.no_grad():
+            diag_e = hamiltonian.diagonal_elements_batch(configs_dev)
+            e0_approx = float((weights_t * diag_e).sum())
+            if math.isfinite(e0_approx):
+                advantage_t = (diag_e - e0_approx).float()
+            else:
+                logger.warning(
+                    "Non-finite e0_approx=%.4e; skipping energy term", e0_approx
+                )
+                advantage_t = None
+
     optimiser = torch.optim.Adam(nqs.parameters(), lr=lr)
     losses: list[float] = []
 
@@ -213,9 +247,20 @@ def _train_nqs_teacher(
     for _epoch in range(epochs):
         optimiser.zero_grad()
         log_probs = nqs.log_prob(alpha, beta)
-        # Weighted NLL: - sum_x p_teacher(x) * log q(x)
-        loss = -(weights_t * log_probs).sum()
+
+        # Teacher term: - sum_x p(x) * log q(x)
+        loss = teacher_weight * (-(weights_t * log_probs).sum())
+
+        # Energy term: sum_x p(x) * advantage(x) * log q(x)
+        if energy_weight > 0 and advantage_t is not None:
+            loss = loss + energy_weight * ((weights_t * advantage_t * log_probs).sum())
+
+        # Entropy term: mean(log q(x))
+        if entropy_weight > 0:
+            loss = loss + entropy_weight * log_probs.mean()
+
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(nqs.parameters(), max_norm=1.0)
         optimiser.step()
         losses.append(float(loss.item()))
 

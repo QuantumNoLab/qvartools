@@ -136,7 +136,7 @@ class CIPSISolver(Solver):
             if n_basis <= _SPARSE_DIAG_THRESHOLD:
                 # Dense path: fast for small basis
                 h_matrix = hamiltonian.matrix_elements_fast(basis)
-                h_np = np.asarray(h_matrix, dtype=np.float64)
+                h_np = h_matrix.detach().cpu().numpy().astype(np.float64)
                 h_np = 0.5 * (h_np + h_np.T)
                 eigvals, eigvecs = np.linalg.eigh(h_np)
                 e0 = float(eigvals[0])

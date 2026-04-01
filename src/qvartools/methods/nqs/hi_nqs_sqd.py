@@ -526,26 +526,32 @@ def run_hi_nqs_sqd(
                 h_full = hamiltonian.matrix_elements_fast(cumulative_basis)
                 h_np = h_full.detach().cpu().numpy().astype(np.float64)
                 h_np = 0.5 * (h_np + h_np.T)
-                _, evecs = np.linalg.eigh(h_np)
+                evals, evecs = np.linalg.eigh(h_np)
                 full_coeffs = evecs[:, 0]
+                evict_e0 = float(evals[0])
             else:
                 from scipy.sparse.linalg import eigsh as sp_eigsh
 
                 h_sp = hamiltonian.build_sparse_hamiltonian(cumulative_basis)
-                _, evecs = sp_eigsh(h_sp.tocsr(), k=1, which="SA")
+                evals, evecs = sp_eigsh(h_sp.tocsr(), k=1, which="SA")
                 full_coeffs = evecs[:, 0]
-            cumulative_basis, _ = evict_by_coefficient(
+                evict_e0 = float(evals[0])
+            cumulative_basis, evicted_coeffs = evict_by_coefficient(
                 cumulative_basis, full_coeffs, cfg.max_basis_size
             )
+            # Use post-eviction state as PT2 reference (consistent basis + coeffs)
+            prev_coeffs = evicted_coeffs.copy()
+            prev_batch_configs = cumulative_basis.clone()
+            prev_energy = evict_e0
             logger.info(
                 "  evicted to %d configs (full-basis diag)", cumulative_basis.shape[0]
             )
-
-        # --- Update persistent eigenvector state for next iteration's PT2 ---
-        if best_coeffs is not None and best_batch_configs is not None:
-            prev_coeffs = best_coeffs.copy()
-            prev_batch_configs = best_batch_configs.clone()
-            prev_energy = best_batch_energy
+        else:
+            # --- Update persistent eigenvector state for next iteration's PT2 ---
+            if best_coeffs is not None and best_batch_configs is not None:
+                prev_coeffs = best_coeffs.copy()
+                prev_batch_configs = best_batch_configs.clone()
+                prev_energy = best_batch_energy
 
         # --- Update occupancies ---
         if isinstance(latest_occs, tuple) and len(latest_occs) == 2:

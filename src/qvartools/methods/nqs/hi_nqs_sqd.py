@@ -391,6 +391,7 @@ def run_hi_nqs_sqd(
     # Persistent eigenvector state for PT2 scoring across iterations
     prev_coeffs: np.ndarray | None = None
     prev_batch_configs: torch.Tensor | None = None
+    prev_energy: float = float("inf")
 
     for iteration in range(cfg.n_iterations):
         logger.info("HI+NQS+SQD iteration %d / %d", iteration + 1, cfg.n_iterations)
@@ -429,11 +430,13 @@ def run_hi_nqs_sqd(
             and prev_batch_configs is not None
         ):
             scores = compute_pt2_scores(
-                unique_new, prev_batch_configs, prev_coeffs, hamiltonian, best_energy
+                unique_new, prev_batch_configs, prev_coeffs, hamiltonian, prev_energy
             )
             n_keep = min(cfg.pt2_top_k, unique_new.shape[0])
             top_idx = torch.tensor(
-                np.argsort(scores)[::-1][:n_keep].copy(), dtype=torch.long
+                np.argsort(scores)[::-1][:n_keep].copy(),
+                dtype=torch.long,
+                device=unique_new.device,
             )
             unique_new = unique_new[top_idx]
             logger.info(
@@ -529,12 +532,13 @@ def run_hi_nqs_sqd(
                     best_batch_configs, best_coeffs, cfg.max_basis_size
                 )
                 cumulative_basis = best_batch_configs
-            logger.info("  evicted to %d configs", cumulative_basis.shape[0])
+                logger.info("  evicted to %d configs", cumulative_basis.shape[0])
 
         # --- Update persistent eigenvector state for next iteration's PT2 ---
         if best_coeffs is not None and best_batch_configs is not None:
             prev_coeffs = best_coeffs
             prev_batch_configs = best_batch_configs
+            prev_energy = best_batch_energy
 
         # --- Update occupancies ---
         if isinstance(latest_occs, tuple) and len(latest_occs) == 2:

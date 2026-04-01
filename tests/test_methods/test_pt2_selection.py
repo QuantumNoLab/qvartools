@@ -383,15 +383,6 @@ class TestRunHiNqsSqdPT2Integration:
             final_temperature=0.5,
         )
 
-        temperatures_used = []
-
-        original_sample = None
-
-        def capture_temperature(*args, **kwargs):
-            if "temperature" in kwargs:
-                temperatures_used.append(kwargs["temperature"])
-            return original_sample(*args, **kwargs)
-
         mock_return = (-1.0, np.array([1.0]), (np.array([0.5]), np.array([0.5])))
         with patch(
             "qvartools.methods.nqs.hi_nqs_sqd.gpu_solve_fermion",
@@ -399,7 +390,9 @@ class TestRunHiNqsSqdPT2Integration:
         ):
             result = run_hi_nqs_sqd(h2_hamiltonian, minimal_mol_info, config=cfg)
 
-        # Just verify it ran without error; temperature capture is complex to mock
+        # Smoke test: verify PT2 with temperature annealing runs without error.
+        # Verifying actual temperature values would require patching
+        # AutoregressiveTransformer.sample, which is fragile on small systems.
         assert result.method == "HI+NQS+SQD"
 
 

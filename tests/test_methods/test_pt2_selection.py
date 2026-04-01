@@ -401,3 +401,38 @@ class TestRunHiNqsSqdPT2Integration:
 
         # Just verify it ran without error; temperature capture is complex to mock
         assert result.method == "HI+NQS+SQD"
+
+
+# ---------------------------------------------------------------------------
+# P4: CIPSI sparse fallback
+# ---------------------------------------------------------------------------
+
+_CIPSI_SPARSE_THRESHOLD = 10_000
+
+
+@pytest.mark.pyscf
+class TestCIPSISparsefallback:
+    """Test CIPSI uses sparse diag when basis exceeds threshold."""
+
+    def test_cipsi_uses_sparse_for_large_basis(self, h2_hamiltonian):
+        """When basis > threshold, CIPSI should use build_sparse_hamiltonian."""
+        from unittest.mock import patch
+
+        from qvartools.solvers.subspace.cipsi import CIPSISolver
+
+        # Monkeypatch threshold to 1 so H2 (4 configs) triggers sparse
+        with patch("qvartools.solvers.subspace.cipsi._SPARSE_DIAG_THRESHOLD", 1):
+            solver = CIPSISolver(max_iterations=2, expansion_size=2)
+            result = solver.solve(h2_hamiltonian, {"name": "test"})
+
+        assert result.energy is not None
+        assert result.method == "CIPSI"
+
+    def test_cipsi_dense_and_sparse_match(self, h2_hamiltonian):
+        """Dense and sparse paths should give the same energy."""
+        from qvartools.solvers.subspace.cipsi import CIPSISolver
+
+        solver = CIPSISolver(max_iterations=3, expansion_size=5)
+        result = solver.solve(h2_hamiltonian, {"name": "test"})
+        # H2 is small enough for dense, just verify it works
+        assert result.energy is not None

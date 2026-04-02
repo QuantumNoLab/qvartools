@@ -762,7 +762,21 @@ Fast integer hash for a single configuration tensor.
 
 ### `run_hi_nqs_sqd(hamiltonian, mol_info, config=None, *, initial_basis=None)`
 
-Iterative HI+NQS+SQD pipeline with self-consistent eigenvector feedback. Config: `HINQSSQDConfig`. The `initial_basis` kwarg accepts a `torch.Tensor` of shape `(n_configs, n_qubits)` to warm-start the cumulative basis.
+Iterative HI+NQS+SQD pipeline with self-consistent eigenvector feedback. Config: `HINQSSQDConfig`. The `initial_basis` kwarg accepts a `torch.Tensor` of shape `(n_configs, n_qubits)` to warm-start the cumulative basis. Auto-enables IBM `solve_fermion` (α×β Cartesian product) when `qiskit_addon_sqd` is installed.
+
+### `_pt2_helpers` (Internal PT2 Selection Helpers)
+
+#### `compute_pt2_scores(candidates, basis, coeffs, hamiltonian, e0) -> np.ndarray`
+
+Score candidate configs by Epstein-Nesbet PT2 importance: `score(x) = |⟨x|H|Φ₀⟩|² / |E₀ - H_xx|`. Returns non-negative scores, shape `(n_cand,)`.
+
+#### `evict_by_coefficient(basis, coeffs, max_size) -> tuple[Tensor, ndarray]`
+
+Keep only the highest-|c_i|² configs (ASCI pattern). Returns trimmed basis and coefficients.
+
+#### `compute_temperature(iteration, max_iterations, t_init, t_final) -> float`
+
+Linear temperature annealing from `t_init` to `t_final` over iterations.
 
 ### `run_hi_nqs_skqd(hamiltonian, mol_info, config=None, *, initial_basis=None)`
 

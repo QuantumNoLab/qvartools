@@ -18,7 +18,7 @@ qvartools consolidates normalizing-flow-guided neural quantum states (NF-NQS), s
 - **Unified solver interface** covering FCI, CCSD, SQD, SKQD, and iterative NF variants -- all returning a common `SolverResult`
 - **Automatic system-size scaling** that adapts network architectures and sampling budgets to the Hilbert-space dimension
 - **YAML-based experiment configuration** with CLI overrides for reproducible experiments
-- **Molecule registry** with pre-configured benchmarks from H2 (4 qubits) to C2H4 (28 qubits)
+- **Molecule registry** with 26 pre-configured benchmarks from H₂ (4 qubits) to Cr₂-CAS(12,36) (72 qubits)
 
 ## Installation
 
@@ -169,6 +169,8 @@ Each subpackage is self-contained with a clean public API. Lower-level modules h
 | Cr2-CAS(12,26) | 52 | cc-pvdz | 12e, 26 orb |
 | Cr2-CAS(12,28) | 56 | cc-pvdz | 12e, 28 orb |
 | Cr2-CAS(12,29) | 58 | cc-pvdz | 12e, 29 orb |
+| Cr2-CAS(12,32) | 64 | cc-pvdz | 12e, 32 orb |
+| Cr2-CAS(12,36) | 72 | cc-pvdz | 12e, 36 orb |
 
 ## Documentation
 

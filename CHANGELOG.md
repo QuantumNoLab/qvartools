@@ -18,12 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `compute_molecular_integrals` now accepts `cas` and `casci` parameters for CAS active-space reduction
-- 12 new CAS molecules in registry: N₂-CAS(10,12/15/17/20/26), Cr₂ + variants, Benzene CAS(6,15)
+- 14 new CAS molecules in registry (26 total): N₂-CAS(10,12/15/17/20/26), Cr₂ + variants up to 72Q, Benzene CAS(6,15)
+- IBM `solve_fermion` auto-enabled when `qiskit_addon_sqd` is installed (α×β Cartesian product, dramatically better accuracy)
+- `_train_nqs_teacher` raises `ValueError` when `energy_weight > 0` without `hamiltonian`
 - `_compute_cas_integrals` helper with auto-CASCI fallback for large active spaces
 - `MolecularHamiltonian.build_sparse_hamiltonian()` for O(nnz) sparse H construction
 - Sparse eigenvalue dispatch in `gpu_solve_fermion` for basis > 8K configs
 - CAS-aware `FCISolver` using active-space integrals directly (no full molecule rebuild)
 - FCI-free pipeline support: 25 experiment scripts gracefully handle `exact_energy=None`
+- PT2 configuration selection for HI+NQS+SQD (`use_pt2_selection=True`, ADR-005)
+- `_pt2_helpers.py`: EN-PT2 scoring, ASCI coefficient eviction, temperature annealing
+- 3-term NQS teacher loss (teacher KL + energy REINFORCE + entropy)
+- CIPSI sparse fallback for basis > 10K via `build_sparse_hamiltonian`
 - `TransformerAsNQS` adapter: enables `AutoregressiveTransformer` in NF training pipeline
 - `NQSWithSampling` adapter: enables any `NeuralQuantumState` in HI training pipeline
 - `qvartools._logging` module with `configure_logging()` and `get_logger()`
@@ -38,10 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-002 decision record (deferred: torch/numpy roundtrip not a bottleneck)
 - ADR-003 decision record (GPU-native SBD integration via r-ccs-cms/sbd)
 
+### Removed
+- S-CORE (`recover_configurations`) from HI-NQS-SQD IBM path — designed for quantum hardware noise, not needed for classical NQS samples (NH₃ 1.5 hr → 5 s)
+
 ### Fixed
 - `TransformerNFSampler._build_nqs()` used wrong parameter name `hidden_dim` instead of `hidden_dims`
 - `hi_nqs_sqd.py` passed tensors instead of numpy arrays to `vectorized_dedup`
 - Groups 07/08 pipelines discarded NF+DCI basis when calling iterative NQS solvers (Issue #10)
+- IBM `solve_fermion` returns electronic energy only; now correctly adds `nuclear_repulsion`
+- CIPSI sparse path: `h_matrix.detach().cpu().numpy()` instead of `np.asarray` for CUDA tensors
 
 ## [0.0.0] - 2026-03-26
 

@@ -812,6 +812,21 @@ MOLECULE_REGISTRY: dict[str, dict[str, Any]] = {
         "basis": "cc-pvdz",
         "is_cas": True,
     },
+    # --- 64+ qubit systems ---
+    "cr2-cas(12,32)": {
+        "factory": lambda device="cpu": _make_cr2("cc-pvdz", (12, 32), device),
+        "n_qubits": 64,
+        "description": "Chromium dimer CAS(12,32) cc-pVDZ",
+        "basis": "cc-pvdz",
+        "is_cas": True,
+    },
+    "cr2-cas(12,36)": {
+        "factory": lambda device="cpu": _make_cr2("cc-pvdz", (12, 36), device),
+        "n_qubits": 72,
+        "description": "Chromium dimer CAS(12,36) cc-pVDZ",
+        "basis": "cc-pvdz",
+        "is_cas": True,
+    },
 }
 
 _MOLECULE_INFO_REGISTRY: dict[str, dict[str, Any]] = {
@@ -874,6 +889,15 @@ _MOLECULE_INFO_REGISTRY: dict[str, dict[str, Any]] = {
     },
     "cr2-cas(12,29)": {
         **_build_info("Cr2-CAS(12,29)", 58, "cc-pvdz", list(_CR2_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
+    # --- 64+ qubit systems ---
+    "cr2-cas(12,32)": {
+        **_build_info("Cr2-CAS(12,32)", 64, "cc-pvdz", list(_CR2_GEOMETRY), 0, 0),
+        "is_cas": True,
+    },
+    "cr2-cas(12,36)": {
+        **_build_info("Cr2-CAS(12,36)", 72, "cc-pvdz", list(_CR2_GEOMETRY), 0, 0),
         "is_cas": True,
     },
 }

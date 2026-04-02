@@ -257,7 +257,7 @@ qvartools/
 │   │       └── lucj_sampler.py       # LUCJSampler (Qiskit + ffsim LUCJ circuit)
 │   │
 │   ├── molecules/                # Molecular system registry
-│   │   └── registry.py           # MOLECULE_REGISTRY (24 molecules: 12 full-space + 12 CAS), get_molecule, list_molecules
+│   │   └── registry.py           # MOLECULE_REGISTRY (26 molecules: 12 full-space + 14 CAS), get_molecule, list_molecules
 │   │
 │   ├── _ext/                     # Experimental GPU extensions
 │   │   ├── __init__.py
@@ -268,8 +268,9 @@ qvartools/
 │   │   └── nqs/
 │   │       ├── nqs_sqd.py        # NQSSQDConfig, run_nqs_sqd
 │   │       ├── nqs_skqd.py       # NQSSKQDConfig, run_nqs_skqd
-│   │       ├── hi_nqs_sqd.py     # HINQSSQDConfig, run_hi_nqs_sqd (initial_basis warm-start)
-│   │       └── hi_nqs_skqd.py    # HINQSSKQDConfig, run_hi_nqs_skqd (initial_basis warm-start)
+│   │       ├── hi_nqs_sqd.py     # HINQSSQDConfig, run_hi_nqs_sqd (initial_basis, PT2 selection)
+│   │       ├── hi_nqs_skqd.py    # HINQSSKQDConfig, run_hi_nqs_skqd (initial_basis warm-start)
+│   │       └── _pt2_helpers.py   # compute_pt2_scores, evict_by_coefficient, compute_temperature
 │   │
 │   └── _utils/                   # Internal utilities
 │       ├── scaling/
@@ -454,7 +455,7 @@ Stage 1: Train Flow + NQS          Stage 2: Basis Selection         Stage 3: Sub
 
 ## 4. Molecule Registry
 
-24 pre-configured molecular benchmarks (12 full-space + 12 CAS active-space) accessible via `get_molecule(name)`:
+26 pre-configured molecular benchmarks (12 full-space + 14 CAS active-space) accessible via `get_molecule(name)`:
 
 **Full-space molecules (4--28 qubits)**
 
@@ -473,7 +474,7 @@ Stage 1: Train Flow + NQS          Stage 2: Basis Selection         Stage 3: Sub
 | H2S | 26 | sto-3g | bent |
 | C2H4 | 28 | sto-3g | planar |
 
-**CAS active-space molecules (24--58 qubits)**
+**CAS active-space molecules (24--72 qubits)**
 
 | Name | Qubits | Basis Set | Active Space |
 |------|--------|-----------|--------------|
@@ -489,6 +490,8 @@ Stage 1: Train Flow + NQS          Stage 2: Basis Selection         Stage 3: Sub
 | Cr2-CAS(12,26) | 52 | cc-pvdz | 12e, 26o |
 | Cr2-CAS(12,28) | 56 | cc-pvdz | 12e, 28o |
 | Cr2-CAS(12,29) | 58 | cc-pvdz | 12e, 29o |
+| Cr2-CAS(12,32) | 64 | cc-pvdz | 12e, 32o |
+| Cr2-CAS(12,36) | 72 | cc-pvdz | 12e, 36o |
 
 ---
 
@@ -763,6 +766,14 @@ The `_ext/` subpackage is **experimental and optional**. `sbd_subprocess` requir
 
 When `SQDConfig.use_cartesian_product=True` (default), SQD splits sampled configs into alpha/beta spin strings via `split_spin_strings()`, then enumerates all alpha×beta pairs via `cartesian_product_configs()`. This dramatically improves basis coverage for molecular Hamiltonians.
 
+### IBM `solve_fermion` Energy Convention
+
+IBM's `qiskit_addon_sqd.fermion.solve_fermion` returns **electronic energy only** (no nuclear repulsion). Always add `hamiltonian.integrals.nuclear_repulsion` to the result. Its `sci_state.amplitudes` is **2D** (n_alpha_strs × n_beta_strs), not 1D — use α/β marginals for NQS teacher weights.
+
+### S-CORE is for Quantum Hardware Only
+
+`recover_configurations` (S-CORE) in `qiskit_addon_sqd` is a noise-recovery technique for noisy quantum hardware samples. **Do not use it for classical NQS samples** — it adds massive overhead (NH₃: 1.5 hr → 5 s without it) with no accuracy benefit on clean samples.
+
 ---
 
 ## 11. CI/CD
@@ -770,9 +781,12 @@ When `SQDConfig.use_cartesian_product=True` (default), SQD splits sampled config
 ### GitHub Actions
 
 **CI Pipeline** (`.github/workflows/ci.yml`):
-- **Lint job:** `ruff format --check` + `ruff check` on Python 3.11
-- **Test job:** `pytest` on Python 3.10, 3.11, 3.12 with `[dev,pyscf]` extras
-- Excludes `gpu` marker tests
+- **Lint job:** `ruff format --check` + `ruff check` on Python 3.11, pip cached
+- **Typecheck job:** `mypy` on core modules (informational)
+- **Smoke job:** Verifies 26+ molecules registered + all public modules importable
+- **Test job:** `pytest` on Python 3.10, 3.11, 3.12 with `[dev,pyscf]` extras; coverage only on 3.11 (`--cov-fail-under=40`); excludes `gpu` marker
+- **Docs job:** Sphinx build check on PRs (warns but doesn't block)
+- **Global:** `concurrency: cancel-in-progress` cancels superseded runs; `fail-fast: false`
 
 **Docs Pipeline** (`.github/workflows/docs.yml`):
 - Sphinx build on push to main

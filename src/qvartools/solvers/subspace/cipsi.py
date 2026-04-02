@@ -52,6 +52,7 @@ _MAX_ITERATIONS = 30
 _MAX_BASIS_SIZE = 10_000
 _CONVERGENCE_THRESHOLD = 1e-5  # Hartree
 _EXPANSION_SIZE = 500
+_SPARSE_DIAG_THRESHOLD = 8_000  # switch to sparse eigsh above this basis size
 
 
 # ---------------------------------------------------------------------------
@@ -97,8 +98,10 @@ class CIPSISolver(Solver):
         ----------
         hamiltonian : MolecularHamiltonian
             Hamiltonian exposing ``get_hf_state()``, ``matrix_elements_fast()``,
-            ``get_connections()``, ``diagonal_element()``, and
-            ``diagonal_elements_batch()``.
+            ``get_connections()``, ``diagonal_element()``,
+            ``diagonal_elements_batch()``, and ``build_sparse_hamiltonian()``
+            (the latter only needed when the basis exceeds
+            ``_SPARSE_DIAG_THRESHOLD``).
         mol_info : dict
             Molecular metadata (unused, kept for API compatibility).
 
@@ -130,12 +133,23 @@ class CIPSISolver(Solver):
             n_basis = basis.shape[0]
 
             # (a) Build and diagonalize projected H
-            h_matrix = hamiltonian.matrix_elements_fast(basis)
-            h_np = np.asarray(h_matrix, dtype=np.float64)
-            h_np = 0.5 * (h_np + h_np.T)
-            eigvals, eigvecs = np.linalg.eigh(h_np)
-            e0 = float(eigvals[0])
-            coeffs = eigvecs[:, 0]
+            if n_basis <= _SPARSE_DIAG_THRESHOLD:
+                # Dense path: fast for small basis
+                h_matrix = hamiltonian.matrix_elements_fast(basis)
+                h_np = h_matrix.detach().cpu().numpy().astype(np.float64)
+                h_np = 0.5 * (h_np + h_np.T)
+                eigvals, eigvecs = np.linalg.eigh(h_np)
+                e0 = float(eigvals[0])
+                coeffs = eigvecs[:, 0]
+            else:
+                # Sparse path: handles basis > 10K without OOM
+                from scipy.sparse.linalg import eigsh as sp_eigsh
+
+                h_sparse = hamiltonian.build_sparse_hamiltonian(basis)
+                h_csr = h_sparse.tocsr()
+                eigvals, eigvecs = sp_eigsh(h_csr, k=1, which="SA")
+                e0 = float(eigvals[0])
+                coeffs = eigvecs[:, 0]
 
             iteration_energies.append(e0)
             logger.debug("CIPSI iter %d: basis=%d  E=%.10f Ha", it, n_basis, e0)

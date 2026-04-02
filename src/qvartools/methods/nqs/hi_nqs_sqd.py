@@ -34,6 +34,11 @@ from qvartools._utils.formatting.bitstring_format import (
     vectorized_dedup,
 )
 from qvartools._utils.gpu.diagnostics import gpu_solve_fermion
+from qvartools.methods.nqs._pt2_helpers import (
+    compute_pt2_scores,
+    compute_temperature,
+    evict_by_coefficient,
+)
 from qvartools.nqs.transformer.autoregressive import AutoregressiveTransformer
 from qvartools.solvers.solver import SolverResult
 
@@ -49,16 +54,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 try:
-    from qiskit_addon_sqd.configuration_recovery import (
-        recover_configurations,  # type: ignore[import-untyped]
-    )
     from qiskit_addon_sqd.fermion import (
         solve_fermion as ibm_solve_fermion,  # type: ignore[import-untyped]
     )
 
     _IBM_SQD_AVAILABLE = True
 except ImportError:
-    recover_configurations = None  # type: ignore[assignment]
     ibm_solve_fermion = None  # type: ignore[assignment]
     _IBM_SQD_AVAILABLE = False
 
@@ -95,13 +96,41 @@ class HINQSSQDConfig:
     n_layers : int
         Number of transformer layers per channel (default ``4``).
     temperature : float
-        NQS sampling temperature (default ``1.0``).
-    use_ibm_solver : bool
-        Use IBM ``solve_fermion`` when available (default ``False``).
-        Set to ``True`` only if ``qiskit_addon_sqd`` is installed with a
-        compatible API version.
+        NQS sampling temperature (default ``1.0``).  Ignored when
+        ``use_pt2_selection`` is ``True`` (uses annealing schedule instead).
+    use_ibm_solver : bool or None
+        Control IBM ``solve_fermion`` usage (default ``None``).
+        ``None``: auto-enable when ``qiskit_addon_sqd`` is installed.
+        ``True``: force enable (fails if not installed).
+        ``False``: force disable (use ``gpu_solve_fermion`` fallback).
     device : str
         Torch device string (default ``"cpu"``).
+    use_pt2_selection : bool
+        Enable PT2-based perturbative selection of NQS samples
+        (default ``False``).  When ``True``, only the highest-scoring
+        configs (by Epstein-Nesbet PT2 importance) are added to the basis
+        each iteration, and low-coefficient configs are evicted.
+    pt2_top_k : int
+        Number of highest-PT2-scoring configs to keep per iteration
+        (default ``2000``).  Only used when ``use_pt2_selection`` is ``True``.
+    max_basis_size : int
+        Maximum cumulative basis size (default ``10_000``).  Excess configs
+        are evicted by lowest ``|c_i|²`` after each diagonalisation.
+        Only used when ``use_pt2_selection`` is ``True``.
+    convergence_window : int
+        Number of consecutive iterations with ``|ΔE| < energy_tol``
+        required before declaring convergence (default ``3``).
+    initial_temperature : float
+        NQS sampling temperature at iteration 0 (default ``1.0``).
+        Linearly annealed to ``final_temperature``.
+    final_temperature : float
+        NQS sampling temperature at the final iteration (default ``0.3``).
+    teacher_weight : float
+        Weight for the KL-divergence teacher loss term (default ``1.0``).
+    energy_weight : float
+        Weight for the REINFORCE energy loss term (default ``0.0``).
+    entropy_weight : float
+        Weight for the entropy regularisation term (default ``0.0``).
     """
 
     n_iterations: int = 10
@@ -115,8 +144,17 @@ class HINQSSQDConfig:
     n_heads: int = 4
     n_layers: int = 4
     temperature: float = 1.0
-    use_ibm_solver: bool = False
+    use_ibm_solver: bool | None = None
     device: str = "cpu"
+    use_pt2_selection: bool = False
+    pt2_top_k: int = 2000
+    max_basis_size: int = 10_000
+    convergence_window: int = 3
+    initial_temperature: float = 1.0
+    final_temperature: float = 0.3
+    teacher_weight: float = 1.0
+    energy_weight: float = 0.0
+    entropy_weight: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -131,11 +169,23 @@ def _train_nqs_teacher(
     n_orb: int,
     lr: float,
     epochs: int,
+    *,
+    teacher_weight: float = 1.0,
+    energy_weight: float = 0.0,
+    entropy_weight: float = 0.0,
+    hamiltonian: Any = None,
 ) -> list[float]:
     """Train NQS using eigenvector coefficients as teacher signal.
 
-    Minimises the KL divergence between the teacher distribution
-    ``p_teacher(x) = |c_x|^2`` and the NQS distribution.
+    Minimises a weighted combination of three loss terms:
+
+    - **Teacher** (KL divergence): ``- sum_x p_teacher(x) * log q(x)``
+    - **Energy** (REINFORCE): ``sum_x p_teacher(x) * advantage(x) * log q(x)``
+    - **Entropy**: ``mean(log q(x))``
+
+    where ``p_teacher(x) = |c_x|^2 / Z`` (full joint distribution, NOT
+    α/β marginals) and ``advantage(x) = H_xx - <H_xx>_{p_teacher}``, i.e. the
+    diagonal energy minus its mean under the teacher distribution.
 
     Parameters
     ----------
@@ -151,6 +201,15 @@ def _train_nqs_teacher(
         Learning rate.
     epochs : int
         Training epochs.
+    teacher_weight : float, optional
+        Weight for the KL teacher term (default ``1.0``).
+    energy_weight : float, optional
+        Weight for the REINFORCE energy term (default ``0.0``).
+        Requires ``hamiltonian`` to be provided.
+    entropy_weight : float, optional
+        Weight for the entropy regularisation term (default ``0.0``).
+    hamiltonian : Hamiltonian or None, optional
+        Required when ``energy_weight > 0`` (for diagonal elements).
 
     Returns
     -------
@@ -159,7 +218,7 @@ def _train_nqs_teacher(
     """
     device = next(nqs.parameters()).device
 
-    # Build teacher distribution: p(x) = |c_x|^2 / Z
+    # Build teacher distribution: p(x) = |c_x|^2 / Z (full joint)
     weights = np.abs(coeffs) ** 2
     total = weights.sum()
     if total > 0:
@@ -170,6 +229,25 @@ def _train_nqs_teacher(
     alpha = configs_dev[:, :n_orb]
     beta = configs_dev[:, n_orb:]
 
+    # Precompute energy advantage if needed
+    advantage_t: torch.Tensor | None = None
+    if energy_weight > 0 and hamiltonian is None:
+        raise ValueError(
+            f"energy_weight={energy_weight} requires hamiltonian to be provided, "
+            "but got hamiltonian=None"
+        )
+    if energy_weight > 0 and hamiltonian is not None:
+        with torch.no_grad():
+            diag_e = hamiltonian.diagonal_elements_batch(configs_dev).to(device)
+            e0_approx = float((weights_t * diag_e).sum())
+            if math.isfinite(e0_approx):
+                advantage_t = (diag_e - e0_approx).float()
+            else:
+                logger.warning(
+                    "Non-finite e0_approx=%.4e; skipping energy term", e0_approx
+                )
+                advantage_t = None
+
     optimiser = torch.optim.Adam(nqs.parameters(), lr=lr)
     losses: list[float] = []
 
@@ -177,9 +255,20 @@ def _train_nqs_teacher(
     for _epoch in range(epochs):
         optimiser.zero_grad()
         log_probs = nqs.log_prob(alpha, beta)
-        # Weighted NLL: - sum_x p_teacher(x) * log q(x)
-        loss = -(weights_t * log_probs).sum()
+
+        # Teacher term: - sum_x p(x) * log q(x)
+        loss = teacher_weight * (-(weights_t * log_probs).sum())
+
+        # Energy term: sum_x p(x) * advantage(x) * log q(x)
+        if energy_weight > 0 and advantage_t is not None:
+            loss = loss + energy_weight * ((weights_t * advantage_t * log_probs).sum())
+
+        # Entropy term: mean(log q(x))
+        if entropy_weight > 0:
+            loss = loss + entropy_weight * log_probs.mean()
+
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(nqs.parameters(), max_norm=1.0)
         optimiser.step()
         losses.append(float(loss.item()))
 
@@ -229,6 +318,17 @@ def run_hi_nqs_sqd(
         If all diagonalisation batches produce non-finite energies.
     """
     cfg = config or HINQSSQDConfig()
+
+    # Tri-state IBM solver control:
+    #   None (default) = auto-enable when qiskit_addon_sqd is installed
+    #   True = force enable (α×β Cartesian product, dramatically better accuracy)
+    #   False = force disable (use gpu_solve_fermion fallback)
+    if cfg.use_ibm_solver is None:
+        use_ibm = _IBM_SQD_AVAILABLE
+        if use_ibm:
+            logger.info("Auto-enabling IBM solve_fermion (qiskit_addon_sqd available)")
+    else:
+        use_ibm = cfg.use_ibm_solver
 
     # Support mol_info with or without orbital counts (fall back to hamiltonian)
     _integrals = getattr(hamiltonian, "integrals", None)
@@ -296,15 +396,31 @@ def run_hi_nqs_sqd(
     energy_history: list[float] = []
     best_energy = float("inf")
     converged = False
+    converge_count = 0
+    # Persistent eigenvector state for PT2 scoring across iterations
+    prev_coeffs: np.ndarray | None = None
+    prev_batch_configs: torch.Tensor | None = None
+    prev_energy: float = float("inf")
 
     for iteration in range(cfg.n_iterations):
         logger.info("HI+NQS+SQD iteration %d / %d", iteration + 1, cfg.n_iterations)
 
+        # --- Temperature (annealing when PT2 is on, fixed otherwise) ---
+        if cfg.use_pt2_selection:
+            temp = compute_temperature(
+                iteration,
+                cfg.n_iterations,
+                cfg.initial_temperature,
+                cfg.final_temperature,
+            )
+        else:
+            temp = cfg.temperature
+
         # --- NQS sampling ---
         with torch.no_grad():
-            new_configs = nqs.sample(
-                cfg.n_samples_per_iter, temperature=cfg.temperature
-            ).to(device)
+            new_configs = nqs.sample(cfg.n_samples_per_iter, temperature=temp).to(
+                device
+            )
 
         # Deduplicate against cumulative basis (numpy for vectorized_dedup)
         if cumulative_basis.shape[0] > 0:
@@ -314,6 +430,30 @@ def run_hi_nqs_sqd(
             unique_new = torch.from_numpy(deduped_np).long().to(device)
         else:
             unique_new = torch.unique(new_configs, dim=0)
+
+        # --- PT2 filtering (only when enabled and we have a prior eigenvector) ---
+        if (
+            cfg.use_pt2_selection
+            and unique_new.shape[0] > 0
+            and prev_coeffs is not None
+            and prev_batch_configs is not None
+        ):
+            scores = compute_pt2_scores(
+                unique_new, prev_batch_configs, prev_coeffs, hamiltonian, prev_energy
+            )
+            n_keep = min(cfg.pt2_top_k, unique_new.shape[0])
+            top_idx = torch.tensor(
+                np.argsort(scores)[::-1][:n_keep].copy(),
+                dtype=torch.long,
+                device=unique_new.device,
+            )
+            unique_new = unique_new[top_idx]
+            logger.info(
+                "  PT2 filtered: %d → %d configs (top_k=%d)",
+                len(scores),
+                n_keep,
+                cfg.pt2_top_k,
+            )
 
         cumulative_basis = torch.cat([cumulative_basis, unique_new], dim=0)
         cumulative_basis = torch.unique(cumulative_basis, dim=0)
@@ -341,24 +481,44 @@ def run_hi_nqs_sqd(
             else:
                 batch_configs = cumulative_basis
 
-            # Optional IBM configuration recovery
-            if _IBM_SQD_AVAILABLE and cfg.use_ibm_solver:
+            # IBM solve_fermion with α×β Cartesian product expansion
+            if _IBM_SQD_AVAILABLE and use_ibm:
                 ibm_data = configs_to_ibm_format(batch_configs, n_orb, n_qubits)
-                n_samples = ibm_data.shape[0]
-                uniform_probs = np.ones(n_samples) / n_samples
-                refined_matrix, _ = recover_configurations(
-                    ibm_data,
-                    uniform_probs,
-                    (occ_alpha, occ_beta),
-                    num_elec_a=n_alpha,
-                    num_elec_b=n_beta,
-                )
+                # Skip recover_configurations (S-CORE) — it's designed for noisy
+                # quantum hardware samples, not clean classical NQS samples.
+                # PR #30's best results used "no rescore" mode (no S-CORE).
+                # spin_sq = s(s+1) where s = spin/2. Default 0 = singlet.
+                _spin = mol_info.get("spin", 0)
+                _spin_sq = (_spin / 2) * (_spin / 2 + 1) if _spin else 0
                 e_b, sci_state, occs_b, _ = ibm_solve_fermion(
-                    refined_matrix,
+                    ibm_data,
                     hcore=hamiltonian.integrals.h1e,
                     eri=hamiltonian.integrals.h2e,
+                    spin_sq=_spin_sq,
                 )
-                coeffs_b = sci_state.amplitudes
+                # sci_state.amplitudes is 2D (n_alpha_strs × n_beta_strs).
+                # Build per-config weights from α/β marginals for NQS teacher.
+                # batch_configs stays unchanged (original sampled configs).
+                amps_2d = np.abs(sci_state.amplitudes) ** 2
+                alpha_marginal = amps_2d.sum(axis=1)  # sum over beta
+                beta_marginal = amps_2d.sum(axis=0)  # sum over alpha
+                alpha_marginal /= max(alpha_marginal.sum(), 1e-30)
+                beta_marginal /= max(beta_marginal.sum(), 1e-30)
+
+                # Map each sampled config to a teacher weight via marginals
+                ci_a = sci_state.ci_strs_a
+                ci_b = sci_state.ci_strs_b
+                a_map = {int(s): float(v) for s, v in zip(ci_a, alpha_marginal)}
+                b_map = {int(s): float(v) for s, v in zip(ci_b, beta_marginal)}
+
+                coeffs_b = np.zeros(batch_configs.shape[0], dtype=np.float64)
+                for i in range(batch_configs.shape[0]):
+                    cfg_np = batch_configs[i].cpu().numpy()
+                    a_int = sum(int(cfg_np[k]) << k for k in range(n_orb))
+                    b_int = sum(int(cfg_np[k + n_orb]) << k for k in range(n_orb))
+                    coeffs_b[i] = np.sqrt(a_map.get(a_int, 0.0) * b_map.get(b_int, 0.0))
+                # solve_fermion returns electronic energy; add nuclear repulsion
+                e_b = float(e_b) + float(hamiltonian.integrals.nuclear_repulsion)
             else:
                 e_b, coeffs_b, occs_b = gpu_solve_fermion(batch_configs, hamiltonian)
 
@@ -386,6 +546,46 @@ def run_hi_nqs_sqd(
         energy_history.append(iter_energy)
         best_energy = min(best_energy, iter_energy)
 
+        # --- Coefficient-based eviction (when PT2 is on) ---
+        # ASCI pattern: diagonalise the FULL cumulative basis to get
+        # coefficients for every config, then keep highest |c_i|².
+        if cfg.use_pt2_selection and cumulative_basis.shape[0] > cfg.max_basis_size:
+            n_full = cumulative_basis.shape[0]
+            if n_full <= 50_000:
+                h_full = hamiltonian.matrix_elements_fast(cumulative_basis)
+                h_np = h_full.detach().cpu().numpy().astype(np.float64)
+                h_np = 0.5 * (h_np + h_np.T)
+                evals, evecs = np.linalg.eigh(h_np)
+                full_coeffs = evecs[:, 0]
+                evict_e0 = float(evals[0])
+            else:
+                from scipy.sparse.linalg import eigsh as sp_eigsh
+
+                h_sp = hamiltonian.build_sparse_hamiltonian(cumulative_basis)
+                evals, evecs = sp_eigsh(h_sp.tocsr(), k=1, which="SA")
+                full_coeffs = evecs[:, 0]
+                evict_e0 = float(evals[0])
+            cumulative_basis, evicted_coeffs = evict_by_coefficient(
+                cumulative_basis, full_coeffs, cfg.max_basis_size
+            )
+            # Use post-eviction state as PT2 reference (consistent basis + coeffs)
+            prev_coeffs = evicted_coeffs.copy()
+            prev_batch_configs = cumulative_basis.clone()
+            prev_energy = evict_e0
+            logger.info(
+                "  evicted to %d configs (full-basis diag)", cumulative_basis.shape[0]
+            )
+        else:
+            # --- Update persistent eigenvector state for next iteration's PT2 ---
+            # Note: when cumulative_basis > max_configs_per_batch, best_batch_energy
+            # is from a random sub-sample (not full-basis diag). This is an
+            # approximation of E0 for PT2 scoring — acceptable because the eviction
+            # path (above) uses full-basis diag when basis exceeds max_basis_size.
+            if best_coeffs is not None and best_batch_configs is not None:
+                prev_coeffs = best_coeffs.copy()
+                prev_batch_configs = best_batch_configs.clone()
+                prev_energy = best_batch_energy
+
         # --- Update occupancies ---
         if isinstance(latest_occs, tuple) and len(latest_occs) == 2:
             occ_alpha = np.clip(np.asarray(latest_occs[0], dtype=np.float64), 0.0, 1.0)
@@ -400,6 +600,10 @@ def run_hi_nqs_sqd(
                 n_orb,
                 lr=cfg.nqs_lr,
                 epochs=cfg.nqs_train_epochs,
+                teacher_weight=cfg.teacher_weight,
+                energy_weight=cfg.energy_weight,
+                entropy_weight=cfg.entropy_weight,
+                hamiltonian=hamiltonian,
             )
 
         logger.info(
@@ -409,13 +613,33 @@ def run_hi_nqs_sqd(
             cumulative_basis.shape[0],
         )
 
-        # --- Convergence ---
+        # --- Convergence (with window when PT2 is on) ---
         if len(energy_history) >= 2:
             delta = abs(energy_history[-1] - energy_history[-2])
             if delta < cfg.energy_tol:
-                converged = True
-                logger.info("  converged: |dE|=%.2e", delta)
-                break
+                if cfg.use_pt2_selection:
+                    converge_count += 1
+                    if converge_count >= cfg.convergence_window:
+                        converged = True
+                        logger.info(
+                            "  converged: |dE|=%.2e (window=%d)",
+                            delta,
+                            cfg.convergence_window,
+                        )
+                        break
+                else:
+                    converged = True
+                    logger.info("  converged: |dE|=%.2e", delta)
+                    break
+            else:
+                converge_count = 0
+
+    if not converged:
+        logger.warning(
+            "HI+NQS+SQD did not converge after %d iterations (best=%.8f)",
+            cfg.n_iterations,
+            best_energy,
+        )
 
     wall_time = time.perf_counter() - t_start
 

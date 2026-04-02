@@ -183,7 +183,8 @@ def _train_nqs_teacher(
     - **Entropy**: ``mean(log q(x))``
 
     where ``p_teacher(x) = |c_x|^2 / Z`` (full joint distribution, NOT
-    α/β marginals) and ``advantage(x) = H_xx - E_0`` (diagonal energy).
+    α/β marginals) and ``advantage(x) = H_xx - <H_xx>_{p_teacher}``, i.e. the
+    diagonal energy minus its mean under the teacher distribution.
 
     Parameters
     ----------

@@ -321,6 +321,12 @@ def run_hi_nqs_sqd(
     """
     cfg = config or HINQSSQDConfig()
 
+    # Auto-enable IBM solver when available (α×β Cartesian product gives
+    # dramatically better accuracy: 13 mHa vs 126 mHa at 40Q).
+    use_ibm = cfg.use_ibm_solver or _IBM_SQD_AVAILABLE
+    if use_ibm and not cfg.use_ibm_solver:
+        logger.info("Auto-enabling IBM solve_fermion (qiskit_addon_sqd available)")
+
     # Support mol_info with or without orbital counts (fall back to hamiltonian)
     _integrals = getattr(hamiltonian, "integrals", None)
     n_orb: int = mol_info.get(
@@ -473,7 +479,7 @@ def run_hi_nqs_sqd(
                 batch_configs = cumulative_basis
 
             # Optional IBM configuration recovery
-            if _IBM_SQD_AVAILABLE and cfg.use_ibm_solver:
+            if _IBM_SQD_AVAILABLE and use_ibm:
                 ibm_data = configs_to_ibm_format(batch_configs, n_orb, n_qubits)
                 n_samples = ibm_data.shape[0]
                 uniform_probs = np.ones(n_samples) / n_samples

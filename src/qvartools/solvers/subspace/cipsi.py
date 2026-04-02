@@ -52,7 +52,7 @@ _MAX_ITERATIONS = 30
 _MAX_BASIS_SIZE = 10_000
 _CONVERGENCE_THRESHOLD = 1e-5  # Hartree
 _EXPANSION_SIZE = 500
-_SPARSE_DIAG_THRESHOLD = 10_000  # switch to sparse eigsh above this basis size
+_SPARSE_DIAG_THRESHOLD = 8_000  # switch to sparse eigsh above this basis size
 
 
 # ---------------------------------------------------------------------------

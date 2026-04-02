@@ -98,10 +98,11 @@ class HINQSSQDConfig:
     temperature : float
         NQS sampling temperature (default ``1.0``).  Ignored when
         ``use_pt2_selection`` is ``True`` (uses annealing schedule instead).
-    use_ibm_solver : bool
-        Use IBM ``solve_fermion`` when available (default ``False``).
-        Set to ``True`` only if ``qiskit_addon_sqd`` is installed with a
-        compatible API version.
+    use_ibm_solver : bool or None
+        Control IBM ``solve_fermion`` usage (default ``None``).
+        ``None``: auto-enable when ``qiskit_addon_sqd`` is installed.
+        ``True``: force enable (fails if not installed).
+        ``False``: force disable (use ``gpu_solve_fermion`` fallback).
     device : str
         Torch device string (default ``"cpu"``).
     use_pt2_selection : bool
@@ -143,7 +144,7 @@ class HINQSSQDConfig:
     n_heads: int = 4
     n_layers: int = 4
     temperature: float = 1.0
-    use_ibm_solver: bool = False
+    use_ibm_solver: bool | None = None
     device: str = "cpu"
     use_pt2_selection: bool = False
     pt2_top_k: int = 2000
@@ -318,11 +319,16 @@ def run_hi_nqs_sqd(
     """
     cfg = config or HINQSSQDConfig()
 
-    # Auto-enable IBM solver when available (α×β Cartesian product gives
-    # dramatically better accuracy: 13 mHa vs 126 mHa at 40Q).
-    use_ibm = cfg.use_ibm_solver or _IBM_SQD_AVAILABLE
-    if use_ibm and not cfg.use_ibm_solver:
-        logger.info("Auto-enabling IBM solve_fermion (qiskit_addon_sqd available)")
+    # Tri-state IBM solver control:
+    #   None (default) = auto-enable when qiskit_addon_sqd is installed
+    #   True = force enable (α×β Cartesian product, dramatically better accuracy)
+    #   False = force disable (use gpu_solve_fermion fallback)
+    if cfg.use_ibm_solver is None:
+        use_ibm = _IBM_SQD_AVAILABLE
+        if use_ibm:
+            logger.info("Auto-enabling IBM solve_fermion (qiskit_addon_sqd available)")
+    else:
+        use_ibm = cfg.use_ibm_solver
 
     # Support mol_info with or without orbital counts (fall back to hamiltonian)
     _integrals = getattr(hamiltonian, "integrals", None)
@@ -571,6 +577,10 @@ def run_hi_nqs_sqd(
             )
         else:
             # --- Update persistent eigenvector state for next iteration's PT2 ---
+            # Note: when cumulative_basis > max_configs_per_batch, best_batch_energy
+            # is from a random sub-sample (not full-basis diag). This is an
+            # approximation of E0 for PT2 scoring — acceptable because the eviction
+            # path (above) uses full-basis diag when basis exceeds max_basis_size.
             if best_coeffs is not None and best_batch_configs is not None:
                 prev_coeffs = best_coeffs.copy()
                 prev_batch_configs = best_batch_configs.clone()

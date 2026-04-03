@@ -513,6 +513,99 @@ class TestRunHiNqsSqdPT2Integration:
 
 
 # ---------------------------------------------------------------------------
+# P3b: E_PT2 integration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.pyscf
+class TestEPT2Integration:
+    """Test E_PT2 correction integrated into run_hi_nqs_sqd."""
+
+    @pytest.fixture()
+    def minimal_mol_info(self, h2_hamiltonian):
+        ham = h2_hamiltonian
+        return {
+            "n_orbitals": ham.integrals.n_orbitals,
+            "n_alpha": ham.integrals.n_alpha,
+            "n_beta": ham.integrals.n_beta,
+            "n_qubits": 2 * ham.integrals.n_orbitals,
+        }
+
+    def test_config_has_compute_pt2_correction_field(self):
+        """HINQSSQDConfig should have compute_pt2_correction field."""
+        cfg = HINQSSQDConfig()
+        assert hasattr(cfg, "compute_pt2_correction")
+        assert cfg.compute_pt2_correction is False  # opt-in
+
+    def test_result_metadata_contains_e_pt2(self, h2_hamiltonian, minimal_mol_info):
+        """When compute_pt2_correction=True, metadata should have e_pt2."""
+        from unittest.mock import patch
+
+        from qvartools.methods.nqs.hi_nqs_sqd import run_hi_nqs_sqd
+
+        cfg = HINQSSQDConfig(
+            n_iterations=2,
+            n_samples_per_iter=10,
+            n_batches=1,
+            nqs_train_epochs=1,
+            embed_dim=16,
+            n_heads=2,
+            n_layers=1,
+            compute_pt2_correction=True,
+        )
+
+        # Mock must return coeffs matching batch size
+        def mock_solver(batch_configs, hamiltonian):
+            n = batch_configs.shape[0]
+            coeffs = np.zeros(n)
+            coeffs[0] = 1.0
+            return (-1.0, coeffs, (np.array([0.5]), np.array([0.5])))
+
+        with (
+            patch("qvartools.methods.nqs.hi_nqs_sqd._IBM_SQD_AVAILABLE", False),
+            patch(
+                "qvartools.methods.nqs.hi_nqs_sqd.gpu_solve_fermion",
+                side_effect=mock_solver,
+            ),
+        ):
+            result = run_hi_nqs_sqd(h2_hamiltonian, minimal_mol_info, config=cfg)
+
+        assert "e_pt2" in result.metadata
+        assert "corrected_energy" in result.metadata
+        assert isinstance(result.metadata["e_pt2"], float)
+        assert isinstance(result.metadata["corrected_energy"], float)
+
+    def test_e_pt2_off_has_no_correction(self, h2_hamiltonian, minimal_mol_info):
+        """When compute_pt2_correction=False, metadata should NOT have e_pt2."""
+        from unittest.mock import patch
+
+        from qvartools.methods.nqs.hi_nqs_sqd import run_hi_nqs_sqd
+
+        cfg = HINQSSQDConfig(
+            n_iterations=1,
+            n_samples_per_iter=10,
+            n_batches=1,
+            nqs_train_epochs=1,
+            embed_dim=16,
+            n_heads=2,
+            n_layers=1,
+            compute_pt2_correction=False,
+        )
+
+        mock_return = (-1.0, np.array([1.0]), (np.array([0.5]), np.array([0.5])))
+        with (
+            patch("qvartools.methods.nqs.hi_nqs_sqd._IBM_SQD_AVAILABLE", False),
+            patch(
+                "qvartools.methods.nqs.hi_nqs_sqd.gpu_solve_fermion",
+                return_value=mock_return,
+            ),
+        ):
+            result = run_hi_nqs_sqd(h2_hamiltonian, minimal_mol_info, config=cfg)
+
+        assert "e_pt2" not in result.metadata
+
+
+# ---------------------------------------------------------------------------
 # P4: CIPSI sparse fallback
 # ---------------------------------------------------------------------------
 

@@ -35,6 +35,7 @@ from qvartools._utils.formatting.bitstring_format import (
 )
 from qvartools._utils.gpu.diagnostics import gpu_solve_fermion
 from qvartools.methods.nqs._pt2_helpers import (
+    compute_e_pt2,
     compute_pt2_scores,
     compute_temperature,
     evict_by_coefficient,
@@ -131,6 +132,10 @@ class HINQSSQDConfig:
         Weight for the REINFORCE energy loss term (default ``0.0``).
     entropy_weight : float
         Weight for the entropy regularisation term (default ``0.0``).
+    compute_pt2_correction : bool
+        Compute EN-PT2 energy correction after final iteration
+        (default ``False``).  When ``True``, ``metadata`` includes
+        ``e_pt2`` and ``corrected_energy = energy + e_pt2``.
     """
 
     n_iterations: int = 10
@@ -155,6 +160,7 @@ class HINQSSQDConfig:
     teacher_weight: float = 1.0
     energy_weight: float = 0.0
     entropy_weight: float = 0.0
+    compute_pt2_correction: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -641,6 +647,28 @@ def run_hi_nqs_sqd(
             best_energy,
         )
 
+    # --- Optional E_PT2 correction ---
+    metadata: dict[str, Any] = {
+        "energy_history": energy_history,
+        "n_iterations": len(energy_history),
+        "final_basis_size": int(cumulative_basis.shape[0]),
+    }
+
+    if (
+        cfg.compute_pt2_correction
+        and prev_coeffs is not None
+        and prev_batch_configs is not None
+        and prev_coeffs.shape[0] == prev_batch_configs.shape[0]
+    ):
+        e_pt2 = compute_e_pt2(prev_batch_configs, prev_coeffs, hamiltonian, best_energy)
+        metadata["e_pt2"] = e_pt2
+        metadata["corrected_energy"] = best_energy + e_pt2
+        logger.info(
+            "  E_PT2=%.6f Ha, corrected=%.8f Ha",
+            e_pt2,
+            best_energy + e_pt2,
+        )
+
     wall_time = time.perf_counter() - t_start
 
     return SolverResult(
@@ -649,9 +677,5 @@ def run_hi_nqs_sqd(
         wall_time=wall_time,
         method="HI+NQS+SQD",
         converged=converged,
-        metadata={
-            "energy_history": energy_history,
-            "n_iterations": len(energy_history),
-            "final_basis_size": int(cumulative_basis.shape[0]),
-        },
+        metadata=metadata,
     )

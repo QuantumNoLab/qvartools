@@ -3,6 +3,7 @@
 Standalone pure functions for:
 
 - Epstein-Nesbet PT2 scoring
+- EN-PT2 energy correction (E_PT2)
 - Coefficient-based basis eviction (ASCI pattern)
 - Linear temperature annealing
 
@@ -10,6 +11,8 @@ Functions
 ---------
 compute_pt2_scores
     Score candidates by EN-PT2 importance.
+compute_e_pt2
+    Compute EN-PT2 energy correction.
 evict_by_coefficient
     Keep highest-|c_i|² configs.
 compute_temperature
@@ -112,6 +115,87 @@ def compute_pt2_scores(
         scores[idx] = coupling**2 / denom
 
     return scores
+
+
+def compute_e_pt2(
+    basis: torch.Tensor,
+    coeffs: np.ndarray,
+    hamiltonian: Any,
+    e0: float,
+) -> float:
+    """Compute Epstein-Nesbet second-order perturbation energy correction.
+
+    Sums over all determinants connected to the basis but NOT in the basis::
+
+        E_PT2 = Σ_{x ∉ V} ⟨x|H|Ψ₀⟩² / (E₀ - H_xx)
+
+    where ``Ψ₀ = Σ_i c_i |x_i⟩`` and the sum runs over external
+    determinants reachable via single and double excitations.
+
+    Parameters
+    ----------
+    basis : torch.Tensor
+        Variational basis, shape ``(n_basis, n_qubits)``.
+    coeffs : np.ndarray
+        Ground-state eigenvector, shape ``(n_basis,)``.
+    hamiltonian
+        Hamiltonian with ``get_connections`` and ``diagonal_element``.
+    e0 : float
+        Variational ground-state energy.
+
+    Returns
+    -------
+    float
+        E_PT2 correction (typically negative).
+    """
+    basis_hash_list = config_integer_hash(basis)
+    basis_coeff_map: dict = {}
+    basis_hash_set: set = set()
+    for i, h in enumerate(basis_hash_list):
+        basis_coeff_map[h] = float(coeffs[i])
+        basis_hash_set.add(h)
+
+    # Accumulate coupling ⟨x|H|Ψ₀⟩ for each external determinant x
+    # and collect H_xx for the denominator.
+    external_coupling: dict = {}  # hash -> coupling
+    external_hxx: dict = {}  # hash -> H_xx
+    external_config: dict = {}  # hash -> config tensor (for H_xx lookup)
+
+    for idx in range(basis.shape[0]):
+        c_i = float(coeffs[idx])
+        if abs(c_i) < 1e-14:
+            continue
+
+        connections, h_elements = hamiltonian.get_connections(basis[idx])
+        if connections is None or len(connections) == 0:
+            continue
+
+        conn_hashes = config_integer_hash(connections)
+        for j in range(len(connections)):
+            h_conn = conn_hashes[j]
+            if h_conn in basis_hash_set:
+                continue
+            # Accumulate coupling: ⟨x|H|Ψ₀⟩ += H_xy * c_y
+            contrib = float(h_elements[j]) * c_i
+            if h_conn in external_coupling:
+                external_coupling[h_conn] += contrib
+            else:
+                external_coupling[h_conn] = contrib
+                external_config[h_conn] = connections[j]
+
+    # Compute E_PT2 = Σ coupling² / (e0 - H_xx)
+    e_pt2 = 0.0
+    for h_ext, coupling in external_coupling.items():
+        config = external_config[h_ext]
+        h_xx = float(hamiltonian.diagonal_element(config))
+        if not math.isfinite(h_xx):
+            continue
+        denom = e0 - h_xx
+        if abs(denom) < 1e-14:
+            continue
+        e_pt2 += coupling**2 / denom
+
+    return e_pt2
 
 
 def evict_by_coefficient(

@@ -117,6 +117,85 @@ class TestComputePT2Scores:
         assert np.all(scores == 0.0)
 
 
+@pytest.mark.pyscf
+class TestComputeEPT2:
+    """Test EN-PT2 energy correction."""
+
+    @pytest.fixture()
+    def h2_valid_configs(self, h2_hamiltonian):
+        """Return only particle-number-valid configs for H2."""
+        ham = h2_hamiltonian
+        n_orb = ham.integrals.n_orbitals
+        n_alpha = ham.integrals.n_alpha
+        n_beta = ham.integrals.n_beta
+        all_configs = ham._generate_all_configs()
+        # Filter for correct particle number
+        alpha_count = all_configs[:, :n_orb].sum(dim=1)
+        beta_count = all_configs[:, n_orb:].sum(dim=1)
+        valid_mask = (alpha_count == n_alpha) & (beta_count == n_beta)
+        return all_configs[valid_mask]
+
+    def test_import(self):
+        from qvartools.methods.nqs._pt2_helpers import compute_e_pt2
+
+        assert callable(compute_e_pt2)
+
+    def test_returns_float(self, h2_hamiltonian):
+        from qvartools.methods.nqs._pt2_helpers import compute_e_pt2
+
+        ham = h2_hamiltonian
+        # Use HF state as 1-config basis
+        hf = ham.get_hf_state().unsqueeze(0)
+        e_var = float(ham.diagonal_element(hf[0]))
+        e_pt2 = compute_e_pt2(hf, np.array([1.0]), ham, e_var)
+        assert isinstance(e_pt2, float)
+
+    def test_e_pt2_is_negative(self, h2_hamiltonian):
+        """E_PT2 from HF reference should be negative (lowers energy)."""
+        from qvartools.methods.nqs._pt2_helpers import compute_e_pt2
+
+        ham = h2_hamiltonian
+        hf = ham.get_hf_state().unsqueeze(0)
+        e_var = float(ham.diagonal_element(hf[0]))
+        e_pt2 = compute_e_pt2(hf, np.array([1.0]), ham, e_var)
+        assert e_pt2 < 0, f"E_PT2 should be negative, got {e_pt2}"
+
+    def test_corrected_energy_closer_to_fci(self, h2_hamiltonian, h2_valid_configs):
+        """E_var + E_PT2 should be closer to FCI than E_var alone."""
+        from qvartools.methods.nqs._pt2_helpers import compute_e_pt2
+
+        ham = h2_hamiltonian
+        valid = h2_valid_configs
+        H = ham.matrix_elements_fast(valid).numpy()
+        eigvals, _ = np.linalg.eigh(H)
+        e_fci = eigvals[0]
+
+        # Use HF as 1-config basis (guaranteed lowest diagonal energy)
+        hf = ham.get_hf_state().unsqueeze(0)
+        e_var = float(ham.diagonal_element(hf[0]))
+        e_pt2 = compute_e_pt2(hf, np.array([1.0]), ham, e_var)
+        e_corrected = e_var + e_pt2
+
+        error_var = abs(e_var - e_fci)
+        error_corrected = abs(e_corrected - e_fci)
+        assert error_corrected < error_var, (
+            f"E_var+E_PT2 ({e_corrected:.8f}, err={error_corrected:.6f}) "
+            f"should be closer to FCI ({e_fci:.8f}) than E_var ({e_var:.8f}, err={error_var:.6f})"
+        )
+
+    def test_full_basis_gives_zero(self, h2_hamiltonian, h2_valid_configs):
+        """When basis spans all valid configs, E_PT2 should be ~0."""
+        from qvartools.methods.nqs._pt2_helpers import compute_e_pt2
+
+        ham = h2_hamiltonian
+        valid = h2_valid_configs
+        H = ham.matrix_elements_fast(valid).numpy()
+        eigvals, eigvecs = np.linalg.eigh(H)
+
+        e_pt2 = compute_e_pt2(valid, eigvecs[:, 0], ham, eigvals[0])
+        assert abs(e_pt2) < 1e-10, f"Full-basis E_PT2 should be ~0, got {e_pt2}"
+
+
 class TestEvictByCoefficient:
     """Test ASCI-style coefficient-based eviction (no PySCF needed)."""
 

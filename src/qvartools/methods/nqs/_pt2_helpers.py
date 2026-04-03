@@ -158,7 +158,6 @@ def compute_e_pt2(
     # Accumulate coupling ⟨x|H|Ψ₀⟩ for each external determinant x
     # and collect H_xx for the denominator.
     external_coupling: dict = {}  # hash -> coupling
-    external_hxx: dict = {}  # hash -> H_xx
     external_config: dict = {}  # hash -> config tensor (for H_xx lookup)
 
     for idx in range(basis.shape[0]):

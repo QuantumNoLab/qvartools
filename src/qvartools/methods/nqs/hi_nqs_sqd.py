@@ -654,19 +654,32 @@ def run_hi_nqs_sqd(
         "final_basis_size": int(cumulative_basis.shape[0]),
     }
 
-    if (
-        cfg.compute_pt2_correction
-        and prev_coeffs is not None
-        and prev_batch_configs is not None
-        and prev_coeffs.shape[0] == prev_batch_configs.shape[0]
-    ):
-        e_pt2 = compute_e_pt2(prev_batch_configs, prev_coeffs, hamiltonian, best_energy)
+    if cfg.compute_pt2_correction and cumulative_basis.shape[0] > 0:
+        # Full-basis diag to get consistent (E₀, Ψ₀) for E_PT2
+        n_full = cumulative_basis.shape[0]
+        if n_full <= 50_000:
+            h_full = hamiltonian.matrix_elements_fast(cumulative_basis)
+            h_np = h_full.detach().cpu().numpy().astype(np.float64)
+            h_np = 0.5 * (h_np + h_np.T)
+            evals, evecs = np.linalg.eigh(h_np)
+            pt2_e0 = float(evals[0])
+            pt2_coeffs = evecs[:, 0]
+        else:
+            from scipy.sparse.linalg import eigsh as sp_eigsh
+
+            h_sp = hamiltonian.build_sparse_hamiltonian(cumulative_basis)
+            evals, evecs = sp_eigsh(h_sp.tocsr(), k=1, which="SA")
+            pt2_e0 = float(evals[0])
+            pt2_coeffs = evecs[:, 0]
+
+        e_pt2 = compute_e_pt2(cumulative_basis, pt2_coeffs, hamiltonian, pt2_e0)
         metadata["e_pt2"] = e_pt2
-        metadata["corrected_energy"] = best_energy + e_pt2
+        metadata["corrected_energy"] = pt2_e0 + e_pt2
         logger.info(
-            "  E_PT2=%.6f Ha, corrected=%.8f Ha",
+            "  E_var=%.8f, E_PT2=%.6f Ha, corrected=%.8f Ha",
+            pt2_e0,
             e_pt2,
-            best_energy + e_pt2,
+            pt2_e0 + e_pt2,
         )
 
     wall_time = time.perf_counter() - t_start

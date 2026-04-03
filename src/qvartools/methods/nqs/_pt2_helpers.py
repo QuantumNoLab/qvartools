@@ -123,25 +123,30 @@ def compute_e_pt2(
     hamiltonian: Any,
     e0: float,
 ) -> float:
-    """Compute Epstein-Nesbet second-order perturbation energy correction.
+    r"""Compute Epstein-Nesbet second-order perturbation energy correction.
 
     Sums over all determinants connected to the basis but NOT in the basis::
 
-        E_PT2 = Σ_{x ∉ V} ⟨x|H|Ψ₀⟩² / (E₀ - H_xx)
+        E_PT2 = Σ_{x ∉ V} |⟨x|H|Ψ₀⟩|² / (E₀ - H_xx)
 
     where ``Ψ₀ = Σ_i c_i |x_i⟩`` and the sum runs over external
-    determinants reachable via single and double excitations.
+    determinants reachable via single and double excitations.  For
+    real-valued Hamiltonians, ``|⟨x|H|Ψ₀⟩|² = ⟨x|H|Ψ₀⟩²``.
 
     Parameters
     ----------
     basis : torch.Tensor
-        Variational basis, shape ``(n_basis, n_qubits)``.
+        **Full** variational basis, shape ``(n_basis, n_qubits)``.
+        Must be the complete basis used for the diagonalisation that
+        produced ``coeffs`` and ``e0``.
     coeffs : np.ndarray
-        Ground-state eigenvector, shape ``(n_basis,)``.
+        Ground-state eigenvector from diagonalising H in ``basis``,
+        shape ``(n_basis,)``.
     hamiltonian
         Hamiltonian with ``get_connections`` and ``diagonal_element``.
     e0 : float
-        Variational ground-state energy.
+        Variational ground-state energy from the same diagonalisation
+        as ``coeffs``.
 
     Returns
     -------
@@ -149,11 +154,7 @@ def compute_e_pt2(
         E_PT2 correction (typically negative).
     """
     basis_hash_list = config_integer_hash(basis)
-    basis_coeff_map: dict = {}
-    basis_hash_set: set = set()
-    for i, h in enumerate(basis_hash_list):
-        basis_coeff_map[h] = float(coeffs[i])
-        basis_hash_set.add(h)
+    basis_hash_set: set = set(basis_hash_list)
 
     # Accumulate coupling ⟨x|H|Ψ₀⟩ for each external determinant x
     # and collect H_xx for the denominator.

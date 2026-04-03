@@ -655,6 +655,7 @@ def run_hi_nqs_sqd(
     }
 
     if cfg.compute_pt2_correction and cumulative_basis.shape[0] > 0:
+        t_pt2 = time.perf_counter()
         # Full-basis diag to get consistent (E₀, Ψ₀) for E_PT2
         n_full = cumulative_basis.shape[0]
         if n_full <= 50_000:
@@ -673,13 +674,17 @@ def run_hi_nqs_sqd(
             pt2_coeffs = evecs[:, 0]
 
         e_pt2 = compute_e_pt2(cumulative_basis, pt2_coeffs, hamiltonian, pt2_e0)
+        pt2_wall = time.perf_counter() - t_pt2
         metadata["e_pt2"] = e_pt2
+        metadata["pt2_e0"] = pt2_e0
         metadata["corrected_energy"] = pt2_e0 + e_pt2
+        metadata["pt2_wall_time"] = pt2_wall
         logger.info(
-            "  E_var=%.8f, E_PT2=%.6f Ha, corrected=%.8f Ha",
+            "  E_var=%.8f, E_PT2=%.6f Ha, corrected=%.8f Ha (%.1fs)",
             pt2_e0,
             e_pt2,
             pt2_e0 + e_pt2,
+            pt2_wall,
         )
 
     wall_time = time.perf_counter() - t_start

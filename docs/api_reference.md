@@ -774,6 +774,10 @@ Score candidate configs by Epstein-Nesbet PT2 importance: `score(x) = |⟨x|H|Φ
 
 Keep only the highest-|c_i|² configs (ASCI pattern). Returns trimmed basis and coefficients.
 
+#### `compute_e_pt2(basis, coeffs, hamiltonian, e0) -> float`
+
+Compute EN-PT2 energy correction: `E_PT2 = Σ_{x∉V} |⟨x|H|Ψ₀⟩|² / (E₀ - H_xx)`. Requires full variational basis and matching eigenvector. Returns typically negative correction.
+
 #### `compute_temperature(iteration, max_iterations, t_init, t_final) -> float`
 
 Linear temperature annealing from `t_init` to `t_final` over iterations.

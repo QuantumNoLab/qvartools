@@ -143,7 +143,8 @@ def compute_e_pt2(
         Ground-state eigenvector from diagonalising H in ``basis``,
         shape ``(n_basis,)``.
     hamiltonian
-        Hamiltonian with ``get_connections`` and ``diagonal_element``.
+        Hamiltonian with ``get_connections``, ``diagonal_element``, and
+        ``diagonal_elements_batch``.
     e0 : float
         Variational ground-state energy from the same diagonalisation
         as ``coeffs``.
@@ -186,34 +187,37 @@ def compute_e_pt2(
                 external_coupling[h_conn] += contrib
             else:
                 external_coupling[h_conn] = contrib
-                external_config[h_conn] = connections[j].detach().clone()
+                external_config[h_conn] = connections[j].detach().cpu().clone()
 
     if not external_coupling:
         return 0.0
 
-    # Batched diagonal computation (much faster than per-config calls)
+    # Compute diagonal elements in chunks to bound peak memory
     ext_hashes = list(external_coupling.keys())
-    ext_configs = torch.stack([external_config[h] for h in ext_hashes])
-    h_diag = hamiltonian.diagonal_elements_batch(ext_configs)
-    h_diag_np = h_diag.detach().cpu().numpy().astype(np.float64)
+    diag_batch_size = 4096
 
-    # Free config tensor memory now that we have H_xx values
-    del external_config, ext_configs
-
-    # Compute E_PT2 = Σ coupling² / (e0 - H_xx)
     e_pt2 = 0.0
-    for k, h_ext in enumerate(ext_hashes):
-        h_xx = float(h_diag_np[k])
-        if not math.isfinite(h_xx):
-            continue
-        coupling = external_coupling[h_ext]
-        denom = e0 - h_xx
-        if abs(denom) < 1e-14:
-            sign = -1.0 if denom <= 0 else 1.0
-            denom = sign * 1e-14
-            logger.debug("Near-zero PT2 denominator clamped for hash %s", h_ext)
-        e_pt2 += coupling**2 / denom
+    for start in range(0, len(ext_hashes), diag_batch_size):
+        chunk_hashes = ext_hashes[start : start + diag_batch_size]
+        ext_configs = torch.stack([external_config[h] for h in chunk_hashes])
+        h_diag = hamiltonian.diagonal_elements_batch(ext_configs)
+        h_diag_np = h_diag.detach().cpu().numpy().astype(np.float64)
 
+        for k, h_ext in enumerate(chunk_hashes):
+            h_xx = float(h_diag_np[k])
+            if not math.isfinite(h_xx):
+                continue
+            coupling = external_coupling[h_ext]
+            denom = e0 - h_xx
+            if abs(denom) < 1e-14:
+                sign = -1.0 if denom <= 0 else 1.0
+                denom = sign * 1e-14
+                logger.debug("Near-zero PT2 denominator clamped for hash %s", h_ext)
+            e_pt2 += coupling**2 / denom
+
+        del ext_configs, h_diag, h_diag_np
+
+    del external_config
     return e_pt2
 
 

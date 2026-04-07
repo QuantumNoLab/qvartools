@@ -39,6 +39,11 @@ from qvartools.methods.nqs._pt2_helpers import (
     compute_temperature,
     evict_by_coefficient,
 )
+from qvartools.methods.nqs._shared import (
+    build_autoregressive_nqs,
+    extract_orbital_counts,
+    validate_initial_basis,
+)
 from qvartools.nqs.transformer.autoregressive import AutoregressiveTransformer
 from qvartools.solvers.solver import SolverResult
 
@@ -330,20 +335,7 @@ def run_hi_nqs_sqd(
     else:
         use_ibm = cfg.use_ibm_solver
 
-    # Support mol_info with or without orbital counts (fall back to hamiltonian)
-    _integrals = getattr(hamiltonian, "integrals", None)
-    n_orb: int = mol_info.get(
-        "n_orbitals", _integrals.n_orbitals if _integrals else None
-    )
-    n_alpha: int = mol_info.get("n_alpha", _integrals.n_alpha if _integrals else None)
-    n_beta: int = mol_info.get("n_beta", _integrals.n_beta if _integrals else None)
-    if n_orb is None or n_alpha is None or n_beta is None:
-        raise ValueError(
-            "n_orbitals, n_alpha, and n_beta must be provided via mol_info "
-            "or hamiltonian.integrals. Got: "
-            f"n_orbitals={n_orb}, n_alpha={n_alpha}, n_beta={n_beta}"
-        )
-    n_qubits: int = mol_info.get("n_qubits", 2 * n_orb)
+    n_orb, n_alpha, n_beta, n_qubits = extract_orbital_counts(mol_info, hamiltonian)
     device = torch.device(cfg.device)
 
     logger.info(
@@ -356,14 +348,15 @@ def run_hi_nqs_sqd(
     t_start = time.perf_counter()
 
     # --- Build NQS ---
-    nqs = AutoregressiveTransformer(
-        n_orbitals=n_orb,
-        n_alpha=n_alpha,
-        n_beta=n_beta,
+    nqs = build_autoregressive_nqs(
+        n_orb,
+        n_alpha,
+        n_beta,
         embed_dim=cfg.embed_dim,
         n_heads=cfg.n_heads,
         n_layers=cfg.n_layers,
-    ).to(device)
+        device=device,
+    )
     nqs.eval()
 
     # --- Occupancies (uniform prior) ---
@@ -372,21 +365,9 @@ def run_hi_nqs_sqd(
 
     # --- Cumulative basis (warm-start from initial_basis if provided) ---
     if initial_basis is not None:
-        # Validate raw input before any cast (fail-fast)
-        if initial_basis.is_floating_point() or initial_basis.is_complex():
-            raise ValueError(
-                f"initial_basis must be integer or bool dtype (binary occupations), "
-                f"got {initial_basis.dtype}"
-            )
-        if initial_basis.ndim != 2 or initial_basis.shape[1] != n_qubits:
-            raise ValueError(
-                f"initial_basis must have shape (n_configs, {n_qubits}), "
-                f"but got {tuple(initial_basis.shape)}"
-            )
-        if not torch.all((initial_basis == 0) | (initial_basis == 1)):
-            raise ValueError("initial_basis must contain only binary values {0, 1}")
-        cumulative_basis = initial_basis.to(dtype=torch.long, device=device)
-        cumulative_basis = torch.unique(cumulative_basis, dim=0)
+        cumulative_basis = validate_initial_basis(
+            initial_basis, n_qubits, device=device
+        )
         logger.info(
             "Warm-starting with %d initial basis configs", cumulative_basis.shape[0]
         )

@@ -1,7 +1,7 @@
 """Pipeline 010 hi_nqs_sqd / pt2 — PT2 selection + temperature annealing.
 
-Wraps :func:`qvartools.methods.nqs.run_hi_nqs_sqd` with the ``[pt2]``
-section of ``configs/010_hi_nqs_sqd.yaml``.
+Wraps :func:`qvartools.methods.nqs.run_hi_nqs_sqd` via ``METHODS_REGISTRY`` with
+the ``[pt2]`` section of ``configs/010_hi_nqs_sqd.yaml``.
 
 Usage::
 
@@ -20,14 +20,18 @@ from pathlib import Path
 # Make config_loader importable when run as a script
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import torch  # noqa: E402
-from config_loader import create_base_parser, load_config  # noqa: E402
+from config_loader import (  # noqa: E402
+    _get_explicit_cli_args,
+    create_base_parser,
+    load_config,
+)
 
-from qvartools.methods.nqs import HINQSSQDConfig, run_hi_nqs_sqd  # noqa: E402
+from qvartools.methods.nqs import METHODS_REGISTRY  # noqa: E402
 from qvartools.molecules import get_molecule  # noqa: E402
 from qvartools.solvers import FCISolver  # noqa: E402
 
+METHOD_KEY = "hi_nqs_sqd"
 VARIANT = "pt2"
-METHOD = "hi_nqs_sqd"
 PIPELINE_ID = "010"
 
 
@@ -38,25 +42,41 @@ def main() -> None:
     )
 
     parser = create_base_parser(
-        f"Pipeline {PIPELINE_ID} {METHOD} ({VARIANT}): PT2 selection + temperature annealing."
+        f"Pipeline {PIPELINE_ID} {METHOD_KEY} ({VARIANT}): PT2 selection + temperature annealing."
     )
     args, cfg = load_config(parser)
+    # Detect which CLI args the user actually typed (vs merged defaults).
+    # Needed because load_config mutates args with YAML/_DEFAULTS values.
+    explicit_cli = _get_explicit_cli_args(parser)
 
     # Extract variant section from multi-section YAML; fall back to flat cfg
     section_value = cfg.get(VARIANT)
     section: dict = section_value if isinstance(section_value, dict) else cfg
 
-    # Resolve device: CLI override > section > auto
-    device = args.device or section.get("device", "auto")
+    # Device precedence: explicit CLI > section > "auto"
+    if "device" in explicit_cli:
+        device = args.device
+    else:
+        device = section.get("device", "auto")
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    molecule = args.molecule or section.get("molecule", "h2")
+    # Molecule precedence: explicit CLI positional > section > "h2"
+    if "molecule" in explicit_cli:
+        molecule = args.molecule
+    else:
+        molecule = section.get("molecule", "h2")
+
+    # Dispatch via registry (no hard imports of specific config/runner)
+    method_info = METHODS_REGISTRY[METHOD_KEY]
+    config_cls = method_info["config_cls"]
+    run_fn = method_info["run_fn"]
+
     hamiltonian, mol_info = get_molecule(molecule, device=device)
     n_qubits = mol_info["n_qubits"]
     print(f"Molecule : {molecule}")
     print(f"Qubits   : {n_qubits}")
-    print(f"Pipeline : {PIPELINE_ID}_{METHOD}/{VARIANT}")
+    print(f"Pipeline : {PIPELINE_ID}_{METHOD_KEY}/{VARIANT}")
     print(f"Device   : {device}")
     print("=" * 60)
 
@@ -65,18 +85,18 @@ def main() -> None:
         print(f"Exact (FCI) energy: {fci.energy:.10f} Ha")
     print("-" * 60)
 
-    valid_keys = HINQSSQDConfig.__dataclass_fields__.keys()
+    valid_keys = config_cls.__dataclass_fields__.keys()
     config_kwargs = {k: v for k, v in section.items() if k in valid_keys}
     config_kwargs["device"] = device
-    config = HINQSSQDConfig(**config_kwargs)
+    config = config_cls(**config_kwargs)
 
     t_start = time.perf_counter()
-    result = run_hi_nqs_sqd(hamiltonian, mol_info, config=config)
+    result = run_fn(hamiltonian, mol_info, config=config)
     wall_time = time.perf_counter() - t_start
 
     err_mha = (result.energy - fci.energy) * 1000.0 if fci.energy is not None else None
     print("\n" + "=" * 60)
-    print(f"PIPELINE {PIPELINE_ID}_{METHOD} ({VARIANT}) RESULTS")
+    print(f"PIPELINE {PIPELINE_ID}_{METHOD_KEY} ({VARIANT}) RESULTS")
     print("=" * 60)
     print(f"Best energy : {result.energy:.10f} Ha")
     print(f"Final energy: {result.energy:.10f} Ha")

@@ -4,8 +4,24 @@ _shared --- Shared helpers for NQS method runners
 
 Internal utilities extracted from the four NQS method modules
 (``nqs_sqd``, ``nqs_skqd``, ``hi_nqs_sqd``, ``hi_nqs_skqd``) to remove
-duplication.  Behaviour-preserving extractions only — no API changes
-exposed to callers of the public ``run_*`` functions.
+duplication.
+
+Most extractions are behaviour-preserving.  Scope notes:
+
+1. ``build_autoregressive_nqs`` is a direct lift of identical inline code
+   from all four method modules — no behaviour change.
+2. ``validate_initial_basis`` is a direct lift of the identical validation
+   block from ``hi_nqs_sqd`` and ``hi_nqs_skqd`` — no behaviour change.
+3. ``extract_orbital_counts`` applies the HI-method fall-back logic
+   (``mol_info`` → ``hamiltonian.integrals``) to ALL four runners.  For
+   the HI methods (``hi_nqs_sqd``, ``hi_nqs_skqd``) this is a pure
+   refactor.  For the simple methods (``nqs_sqd``, ``nqs_skqd``) this
+   fixes a pre-existing bug: they previously accessed
+   ``mol_info["n_orbitals"]`` directly, but ``get_molecule()`` does not
+   populate that key, so those runners were broken end-to-end.  Routing
+   through this helper gives them the same fall-back semantics as the HI
+   methods and makes them actually runnable (verified by smoke test on
+   H2 via ``experiments/pipelines/012_nqs_sqd/default.py``).
 
 Functions
 ---------

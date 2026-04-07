@@ -373,7 +373,9 @@ def main() -> None:
             continue
         if args.skip_quantum and ("Krylov-Q" in name or group == "009_vqe"):
             continue
-        if args.skip_iterative and group.startswith(("006", "007", "008")):
+        if args.skip_iterative and group.startswith(
+            ("006", "007", "008", "010", "011")
+        ):
             continue
 
         pipelines_to_run.append((group, script, name, desc))

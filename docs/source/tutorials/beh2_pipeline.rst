@@ -83,12 +83,12 @@ Using YAML Configs
 .. code-block:: bash
 
    # Run from the command line
-   python experiments/pipelines/02_nf_dci/nf_dci_krylov_classical.py beh2 --device cuda
-   python experiments/pipelines/01_dci/dci_krylov_classical.py beh2 --device cuda
+   python experiments/pipelines/002_nf_dci/nf_dci_krylov_classical.py beh2 --device cuda
+   python experiments/pipelines/001_dci/dci_krylov_classical.py beh2 --device cuda
 
    # Or with YAML config overrides
-   python experiments/pipelines/02_nf_dci/nf_dci_krylov_classical.py beh2 \
-       --config experiments/pipelines/configs/02_nf_dci.yaml
+   python experiments/pipelines/002_nf_dci/nf_dci_krylov_classical.py beh2 \
+       --config experiments/pipelines/configs/002_nf_dci.yaml
 
 Interpreting Results
 --------------------

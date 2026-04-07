@@ -18,8 +18,8 @@ Each pipeline group has a matching YAML config in
 
 .. code-block:: bash
 
-   python experiments/pipelines/02_nf_dci/nf_dci_krylov_classical.py \
-       --config experiments/pipelines/configs/02_nf_dci.yaml
+   python experiments/pipelines/002_nf_dci/nf_dci_krylov_classical.py \
+       --config experiments/pipelines/configs/002_nf_dci.yaml
 
 CLI Overrides
 -------------
@@ -29,36 +29,57 @@ Any parameter can be overridden on the command line:
 .. code-block:: bash
 
    # Use YAML config but override the molecule and max epochs
-   python experiments/pipelines/02_nf_dci/nf_dci_krylov_classical.py lih \
-       --config experiments/pipelines/configs/02_nf_dci.yaml \
+   python experiments/pipelines/002_nf_dci/nf_dci_krylov_classical.py lih \
+       --config experiments/pipelines/configs/002_nf_dci.yaml \
        --max-epochs 200 \
        --teacher-weight 0.6
 
 Available Config Files
 ----------------------
 
+Tier 1 — Ablation groups (one flat YAML per group):
+
 .. list-table::
    :header-rows: 1
-   :widths: 30 70
+   :widths: 38 62
 
    * - File
      - Pipeline Group
-   * - ``01_dci.yaml``
+   * - ``001_dci.yaml``
      - Direct-CI (HF+S+D) — no NF training
-   * - ``02_nf_dci.yaml``
+   * - ``002_nf_dci.yaml``
      - NF-trained + Direct-CI merged basis
-   * - ``03_nf_dci_pt2.yaml``
+   * - ``003_nf_dci_pt2.yaml``
      - NF + DCI + PT2 perturbative expansion
-   * - ``04_nf_only.yaml``
+   * - ``004_nf_only.yaml``
      - NF-only basis (ablation, no DCI merge)
-   * - ``05_hf_only.yaml``
+   * - ``005_hf_only.yaml``
      - HF-only reference state (baseline)
-   * - ``06_iterative_nqs.yaml``
+   * - ``006_iterative_nqs.yaml``
      - Iterative NQS sampling + diag
-   * - ``07_iterative_nqs_dci.yaml``
+   * - ``007_iterative_nqs_dci.yaml``
      - NF+DCI merge then iterative NQS
-   * - ``08_iterative_nqs_dci_pt2.yaml``
+   * - ``008_iterative_nqs_dci_pt2.yaml``
      - NF+DCI+PT2 then iterative NQS
+   * - ``009_vqe.yaml``
+     - CUDA-QX VQE (UCCSD + ADAPT-VQE)
+
+Tier 2 — Method-as-pipeline catalog (one multi-section YAML per method):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 38 62
+
+   * - File
+     - Method (sections inside)
+   * - ``010_hi_nqs_sqd.yaml``
+     - HI+NQS+SQD — sections: ``default``, ``pt2``, ``ibm_off``
+   * - ``011_hi_nqs_skqd.yaml``
+     - HI+NQS+SKQD — sections: ``default``, ``ibm_on``
+   * - ``012_nqs_sqd.yaml``
+     - NQS+SQD — section: ``default``
+   * - ``013_nqs_skqd.yaml``
+     - NQS+SKQD — section: ``default``
 
 Config File Structure
 ---------------------

@@ -331,17 +331,24 @@ qvartools/
 ├── experiments/                  # Reproducible experiment scripts
 │   ├── config_loader.py          # YAML loader with CLI overrides (--config, --device)
 │   ├── profile_pipeline.py       # Wall-clock profiling of pipeline stages
-│   └── pipelines/                # 24 end-to-end pipeline scripts (8 groups × 3 diag modes)
-│       ├── run_all_pipelines.py  # Run all 24 pipelines and compare results
-│       ├── configs/              # 8 YAML config files (one per group)
-│       ├── 01_dci/               # Direct-CI (no NF): classical, quantum, SQD
-│       ├── 02_nf_dci/            # NF + DCI merge: classical, quantum, SQD
-│       ├── 03_nf_dci_pt2/        # NF + DCI + PT2 expansion: classical, quantum, SQD
-│       ├── 04_nf_only/           # NF-only ablation: classical, quantum, SQD
-│       ├── 05_hf_only/           # HF-only baseline: classical, quantum, SQD
-│       ├── 06_iterative_nqs/     # Iterative NQS: classical, quantum, SQD
-│       ├── 07_iterative_nqs_dci/ # NF+DCI merge → iterative NQS: classical, quantum, SQD
-│       └── 08_iterative_nqs_dci_pt2/  # NF+DCI+PT2 → iterative NQS: classical, quantum, SQD
+│   └── pipelines/                # 33 end-to-end pipeline scripts (3-digit prefix catalog)
+│       ├── run_all_pipelines.py  # Run all 33 pipelines and compare results
+│       ├── configs/              # 13 YAML configs (9 ablation + 4 method-as-pipeline)
+│       │
+│       ├── 001_dci/              # Direct-CI (no NF): classical, quantum, SQD
+│       ├── 002_nf_dci/           # NF + DCI merge: classical, quantum, SQD
+│       ├── 003_nf_dci_pt2/       # NF + DCI + PT2 expansion: classical, quantum, SQD
+│       ├── 004_nf_only/          # NF-only ablation: classical, quantum, SQD
+│       ├── 005_hf_only/          # HF-only baseline: classical, quantum, SQD
+│       ├── 006_iterative_nqs/    # Iterative NQS: classical, quantum, SQD
+│       ├── 007_iterative_nqs_dci/    # NF+DCI merge → iterative NQS
+│       ├── 008_iterative_nqs_dci_pt2/  # NF+DCI+PT2 → iterative NQS
+│       ├── 009_vqe/              # CUDA-QX VQE: UCCSD, ADAPT-VQE
+│       │
+│       ├── 010_hi_nqs_sqd/       # HI+NQS+SQD: default, pt2, ibm_off
+│       ├── 011_hi_nqs_skqd/      # HI+NQS+SKQD: default, ibm_on
+│       ├── 012_nqs_sqd/          # NQS+SQD: default
+│       └── 013_nqs_skqd/         # NQS+SKQD: default
 │
 ├── docs/                         # Documentation
 │   ├── architecture.md           # Design philosophy, module dependency graph
@@ -599,18 +606,22 @@ pytest --cov=qvartools --cov-report=term-missing
 
 ### Config Loader Pattern
 
-All 24 pipeline scripts use the shared `config_loader.py`:
+All 33 pipeline scripts use the shared `config_loader.py`:
 
 ```bash
-python experiments/pipelines/02_nf_dci/nf_dci_krylov_classical.py h2 --device cuda
+python experiments/pipelines/002_nf_dci/nf_dci_krylov_classical.py h2 --device cuda
 python experiments/pipelines/run_all_pipelines.py h2 --device cuda
-python experiments/pipelines/02_nf_dci/nf_dci_krylov_classical.py lih \
-    --config experiments/pipelines/configs/02_nf_dci.yaml --max-epochs 200
+python experiments/pipelines/002_nf_dci/nf_dci_krylov_classical.py lih \
+    --config experiments/pipelines/configs/002_nf_dci.yaml --max-epochs 200
+
+# New 010-013 method-as-pipeline catalog
+python experiments/pipelines/010_hi_nqs_sqd/default.py h2 --device cuda
+python experiments/pipelines/010_hi_nqs_sqd/pt2.py h2 --device cuda
 ```
 
 **Precedence:** CLI args > YAML file > hardcoded defaults.
 
-### 24 Pipeline Variants (8 Groups × 3 Diag Modes)
+### 33 Pipeline Variants (9 ablation groups + 4 method-as-pipeline groups)
 
 | Group | Basis Source | Classical Krylov | Quantum Krylov | SQD |
 |-------|-------------|-----------------|----------------|-----|

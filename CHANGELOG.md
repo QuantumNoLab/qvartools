@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **BREAKING**: `experiments/pipelines/` folders renamed from 2-digit to 3-digit prefix
+  (`01_dci` → `001_dci`, ..., `09_vqe` → `009_vqe`). YAML configs in
+  `experiments/pipelines/configs/` renamed to match. Leaves room for the 010-099
+  method-as-pipeline catalog tier.
+- **BREAKING**: `run_all_pipelines.py --only` argument now requires 3-digit group
+  prefixes (e.g., `--only 001 002 004`). Passing 2-digit values like `--only 01 02`
+  silently matched no groups; now emits a migration warning with the recommended
+  3-digit form. Scripts, docs, and `docs/experiments_guide.md` updated.
 - **BREAKING**: Rename `SampleBasedKrylovDiagonalization` to `ClassicalKrylovDiagonalization` (ADR-001)
 - **BREAKING**: Rename `FlowGuidedSKQD` to `FlowGuidedKrylovDiag` (ADR-001)
 - **BREAKING**: Default `subspace_mode` changed from `"skqd"` to `"classical_krylov"`
@@ -17,6 +25,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FCISolver._dense_fallback()` returns `None` instead of raising `RuntimeError` for large Hilbert spaces
 
 ### Added
+- **Pipeline catalog Tier 2**: 4 new pipeline folders (`010_hi_nqs_sqd`,
+  `011_hi_nqs_skqd`, `012_nqs_sqd`, `013_nqs_skqd`) wrapping the
+  `qvartools.methods.nqs.*` runners as first-class benchmark catalog entries.
+  Total pipeline scripts: 26 → 33. Each method gets a folder; variants live
+  as separate scripts inside the folder with a multi-section YAML config.
+- `qvartools.methods.nqs.METHODS_REGISTRY`: public dict keyed by method id
+  (`"nqs_sqd"`, `"nqs_skqd"`, `"hi_nqs_sqd"`, `"hi_nqs_skqd"`) mapping to
+  runner function, config class, capability flags, and pipeline folder
+  metadata. Used by 010-013 wrappers and available for benchmark harnesses.
+- `src/qvartools/methods/nqs/_shared.py`: internal module with
+  `build_autoregressive_nqs`, `extract_orbital_counts`,
+  `validate_initial_basis` helpers extracted from the four NQS method
+  modules to remove duplication.
+- `experiments.config_loader.get_explicit_cli_args`: the previously
+  private `_get_explicit_cli_args` is now the public entry point under
+  this name (the leading-underscore alias is kept for backward
+  compatibility with existing callers). Used by the 010-013 wrapper
+  scripts to detect which CLI args were explicitly typed, so YAML
+  section defaults actually apply when `--device`/molecule is omitted.
 - `compute_molecular_integrals` now accepts `cas` and `casci` parameters for CAS active-space reduction
 - 14 new CAS molecules in registry (26 total): N₂-CAS(10,12/15/17/20/26), Cr₂ + variants up to 72Q, Benzene CAS(6,15)
 - IBM `solve_fermion` auto-enabled when `qiskit_addon_sqd` is installed (α×β Cartesian product, dramatically better accuracy)
@@ -48,6 +75,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - S-CORE (`recover_configurations`) from HI-NQS-SQD IBM path — designed for quantum hardware noise, not needed for classical NQS samples (NH₃ 1.5 hr → 5 s)
 
 ### Fixed
+- `nqs_sqd.py` and `nqs_skqd.py` were end-to-end broken: they accessed
+  `mol_info["n_orbitals"]` directly, but `get_molecule()` does not populate
+  that key. Routed through the new `extract_orbital_counts()` helper which
+  falls back to `hamiltonian.integrals` (same fallback logic the HI methods
+  already had). Both runners now smoke-tested on H₂.
 - `TransformerNFSampler._build_nqs()` used wrong parameter name `hidden_dim` instead of `hidden_dims`
 - `hi_nqs_sqd.py` passed tensors instead of numpy arrays to `vectorized_dedup`
 - Groups 07/08 pipelines discarded NF+DCI basis when calling iterative NQS solvers (Issue #10)

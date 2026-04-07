@@ -104,7 +104,7 @@ def load_config(
         *config* is a flat dictionary containing every resolved parameter.
     """
     args = parser.parse_args()
-    explicitly_provided = _get_explicit_cli_args(parser)
+    explicitly_provided = get_explicit_cli_args(parser)
     logger.debug("Explicitly provided CLI args: %s", explicitly_provided)
 
     # Start with built-in defaults
@@ -163,12 +163,16 @@ def _load_yaml(path: str) -> dict[str, Any]:
     return dict(data)
 
 
-def _get_explicit_cli_args(parser: argparse.ArgumentParser) -> set[str]:
+def get_explicit_cli_args(parser: argparse.ArgumentParser) -> set[str]:
     """Return the set of argument *dest* names explicitly provided on the CLI.
 
     We parse ``sys.argv`` a second time using a sentinel default so that
     we can distinguish "user typed ``--device cpu``" from "argparse
     filled in the default".
+
+    This is the preferred public entry point.  The leading-underscore
+    alias :func:`_get_explicit_cli_args` is kept for backward compatibility
+    with existing callers (notably :mod:`tests.test_config_loader`).
     """
     sentinel = object()
     probe = argparse.ArgumentParser(add_help=False)
@@ -208,3 +212,9 @@ def _get_explicit_cli_args(parser: argparse.ArgumentParser) -> set[str]:
     probe_ns, _ = probe.parse_known_args()
 
     return {key for key, value in vars(probe_ns).items() if value is not sentinel}
+
+
+# Backward-compat alias for callers (notably tests.test_config_loader) that
+# imported the leading-underscore name before it became public. Prefer the
+# public name `get_explicit_cli_args` in new code.
+_get_explicit_cli_args = get_explicit_cli_args

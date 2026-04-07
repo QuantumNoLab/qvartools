@@ -78,23 +78,53 @@ the folder, with one multi-section YAML config per method.
    * - Pipeline folder
      - Variants
      - Method (``qvartools.methods.nqs``)
-   * - 010 hi_nqs_sqd
-     - default, pt2, ibm_off
+   * - ``010_hi_nqs_sqd``
+     - ``default``, ``pt2``, ``ibm_off``
      - ``run_hi_nqs_sqd`` — iterative HI loop, optional PT2 selection / IBM solver
-   * - 011 hi_nqs_skqd
-     - default, ibm_on
+   * - ``011_hi_nqs_skqd``
+     - ``default``, ``ibm_on``
      - ``run_hi_nqs_skqd`` — iterative HI loop with Krylov expansion
-   * - 012 nqs_sqd
-     - default
+   * - ``012_nqs_sqd``
+     - ``default``
      - ``run_nqs_sqd`` — two-stage NQS+SQD (no iteration)
-   * - 013 nqs_skqd
-     - default
+   * - ``013_nqs_skqd``
+     - ``default``
      - ``run_nqs_skqd`` — two-stage NQS+SKQD with Krylov expansion
 
-The full method registry is exposed at runtime as
-:data:`qvartools.methods.nqs.METHODS_REGISTRY`, mapping each method id
-(``"nqs_sqd"``, ``"nqs_skqd"``, ``"hi_nqs_sqd"``, ``"hi_nqs_skqd"``) to its
-runner function, config dataclass, capability flags, and pipeline folder.
+Programmatic dispatch via ``METHODS_REGISTRY``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The four methods are also exposed at runtime as
+:data:`qvartools.methods.nqs.METHODS_REGISTRY`, a dict keyed by a stable
+method id (``"nqs_sqd"``, ``"nqs_skqd"``, ``"hi_nqs_sqd"``, ``"hi_nqs_skqd"``).
+Each value is a sub-dict containing:
+
+* ``run_fn`` — the runner function (e.g. ``run_hi_nqs_sqd``)
+* ``config_cls`` — the frozen ``dataclass`` config type
+* ``iterative`` — whether the method is an iterative HI loop
+* ``has_krylov_expansion`` — whether the basis is grown via Hamiltonian connections
+* ``has_ibm_solver`` — whether the method can call IBM ``solve_fermion``
+* ``has_pt2_selection`` — whether PT2-based config selection is supported
+* ``supports_initial_basis`` — whether a warm-start ``initial_basis`` tensor is accepted
+* ``description`` — a short human-readable summary
+* ``pipeline_folder`` — the 3-digit experiment folder that wraps this method
+
+The 010-013 wrapper scripts use this registry so they can dispatch by id
+without hard-importing each method module, and downstream tooling (benchmark
+harnesses, configuration validators, hyperparameter sweep runners) can do
+the same.
+
+.. code-block:: python
+
+   from qvartools.methods.nqs import METHODS_REGISTRY
+   from qvartools.molecules import get_molecule
+
+   info = METHODS_REGISTRY["hi_nqs_sqd"]
+   config = info["config_cls"](n_iterations=5, device="cuda")
+
+   hamiltonian, mol_info = get_molecule("H2")
+   result = info["run_fn"](hamiltonian, mol_info, config=config)
+   print(f"Energy: {result.energy:.10f} Ha")
 
 Numbering convention
 --------------------
@@ -151,28 +181,35 @@ or SQD (batch diag) to compute the ground-state energy.
 Iterative Pipelines
 --------------------
 
-Groups 006-008 use an iterative loop where the ground-state eigenvector
-from each diagonalization is fed back as a training target for the next NQS
-iteration:
+Groups 006-008 (and method-as-pipeline entries 010-011) use an iterative loop
+where the ground-state eigenvector from each diagonalization is fed back as a
+training target for the next NQS iteration. The cleanest way to call an
+iterative method programmatically is via ``METHODS_REGISTRY``:
 
 .. code-block:: python
 
-   from qvartools.methods.nqs import HINQSSKQDConfig, run_hi_nqs_skqd
+   from qvartools.methods.nqs import METHODS_REGISTRY
    from qvartools.molecules import get_molecule
 
    hamiltonian, mol_info = get_molecule("H2")
-   # mol_info from get_molecule() omits orbital counts; the runner extracts
+   # mol_info from get_molecule() omits orbital counts; every runner extracts
    # them from hamiltonian.integrals automatically via extract_orbital_counts.
 
-   config = HINQSSKQDConfig(
+   info = METHODS_REGISTRY["hi_nqs_skqd"]
+   config = info["config_cls"](
        n_iterations=10,
        n_samples_per_iter=5000,
        device="cuda",
    )
 
-   result = run_hi_nqs_skqd(hamiltonian, mol_info, config=config)
+   result = info["run_fn"](hamiltonian, mol_info, config=config)
    print(f"Energy: {result.energy:.10f} Ha")
    print(f"Converged: {result.converged}")
+
+Direct imports still work if you prefer explicit symbols
+(``from qvartools.methods.nqs import HINQSSKQDConfig, run_hi_nqs_skqd``), but
+the registry-based pattern is what the 010-013 pipeline wrappers use and is
+more robust to future additions.
 
 Running Experiment Scripts
 --------------------------

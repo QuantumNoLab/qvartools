@@ -364,6 +364,21 @@ def main() -> None:
         print("  FCI reference unavailable for this system.")
     print(f"{'=' * 80}\n")
 
+    # Detect the pre-2026-04-07 2-digit --only format and print a migration
+    # hint before silently filtering everything out. The catalog now uses
+    # 3-digit prefixes (001-013), so "01 02 04" matches no group.
+    if args.only:
+        legacy_2digit = [o for o in args.only if len(o) == 2 and o.isdigit()]
+        if legacy_2digit:
+            suggested = " ".join("0" + o for o in legacy_2digit)
+            print(
+                f"WARNING: --only values {legacy_2digit} use the old 2-digit "
+                f"format. Pipeline folders now use 3-digit prefixes (001-013). "
+                f"No groups will match these values. Use --only "
+                f"{suggested} instead.",
+                file=sys.stderr,
+            )
+
     # Filter pipelines
     pipelines_to_run = []
     for group, script, name, desc in PIPELINES:

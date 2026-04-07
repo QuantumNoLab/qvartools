@@ -21,8 +21,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 import torch  # noqa: E402
 from config_loader import (  # noqa: E402
-    _get_explicit_cli_args,
     create_base_parser,
+    get_explicit_cli_args,
     load_config,
 )
 
@@ -33,6 +33,49 @@ from qvartools.solvers import FCISolver  # noqa: E402
 METHOD_KEY = "nqs_sqd"
 VARIANT = "default"
 PIPELINE_ID = "012"
+
+# Reserved top-level keys handled outside the dataclass — filtered out
+# before checking for unknown YAML keys so they don't produce false warnings.
+_RESERVED_CFG_KEYS = {"molecule", "device", "config", "verbose"}
+
+
+def _resolve_section(cfg: dict, variant: str) -> dict:
+    """Pick the requested variant section from a multi-section YAML.
+
+    Falls back to the flat cfg if the variant section is absent, but emits
+    a warning when the YAML looks multi-section (has other dict values) so
+    silent misreads don't hide stale configs.
+    """
+    section_value = cfg.get(variant)
+    if isinstance(section_value, dict):
+        return section_value
+    other_sections = [k for k, v in cfg.items() if isinstance(v, dict) and k != variant]
+    if other_sections:
+        print(
+            f"WARNING: --config YAML has sections {sorted(other_sections)} but "
+            f"this script expected section '{variant}'. Falling back to "
+            f"flat cfg; most keys may be silently dropped and the method will "
+            f"run with dataclass defaults.",
+            file=sys.stderr,
+        )
+    return cfg
+
+
+def _build_config_kwargs(section: dict, config_cls, device: str) -> dict:
+    """Filter a YAML section to the valid dataclass fields, warning on unknown keys."""
+    valid_keys = set(config_cls.__dataclass_fields__.keys())
+    section_scalar_keys = {k for k, v in section.items() if not isinstance(v, dict)}
+    unknown = section_scalar_keys - valid_keys - _RESERVED_CFG_KEYS
+    if unknown:
+        print(
+            f"WARNING: YAML section has keys that are not fields of "
+            f"{config_cls.__name__} and will be silently ignored: "
+            f"{sorted(unknown)}",
+            file=sys.stderr,
+        )
+    config_kwargs = {k: v for k, v in section.items() if k in valid_keys}
+    config_kwargs["device"] = device
+    return config_kwargs
 
 
 def main() -> None:
@@ -47,11 +90,9 @@ def main() -> None:
     args, cfg = load_config(parser)
     # Detect which CLI args the user actually typed (vs merged defaults).
     # Needed because load_config mutates args with YAML/_DEFAULTS values.
-    explicit_cli = _get_explicit_cli_args(parser)
+    explicit_cli = get_explicit_cli_args(parser)
 
-    # Extract variant section from multi-section YAML; fall back to flat cfg
-    section_value = cfg.get(VARIANT)
-    section: dict = section_value if isinstance(section_value, dict) else cfg
+    section = _resolve_section(cfg, VARIANT)
 
     # Device precedence: explicit CLI > section > "auto"
     if "device" in explicit_cli:
@@ -85,9 +126,7 @@ def main() -> None:
         print(f"Exact (FCI) energy: {fci.energy:.10f} Ha")
     print("-" * 60)
 
-    valid_keys = config_cls.__dataclass_fields__.keys()
-    config_kwargs = {k: v for k, v in section.items() if k in valid_keys}
-    config_kwargs["device"] = device
+    config_kwargs = _build_config_kwargs(section, config_cls, device)
     config = config_cls(**config_kwargs)
 
     t_start = time.perf_counter()

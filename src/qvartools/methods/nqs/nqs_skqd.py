@@ -26,7 +26,10 @@ import torch
 
 from qvartools._utils.gpu.diagnostics import gpu_solve_fermion
 from qvartools.krylov.expansion.krylov_expand import expand_basis_via_connections
-from qvartools.methods.nqs._shared import build_autoregressive_nqs
+from qvartools.methods.nqs._shared import (
+    build_autoregressive_nqs,
+    extract_orbital_counts,
+)
 from qvartools.solvers.solver import SolverResult
 
 __all__ = [
@@ -120,10 +123,7 @@ def run_nqs_skqd(
     """
     cfg = config or NQSSKQDConfig()
 
-    n_orb: int = mol_info["n_orbitals"]
-    n_alpha: int = mol_info["n_alpha"]
-    n_beta: int = mol_info["n_beta"]
-    n_qubits: int = mol_info["n_qubits"]
+    n_orb, n_alpha, n_beta, n_qubits = extract_orbital_counts(mol_info, hamiltonian)
     device = torch.device(cfg.device)
 
     logger.info("run_nqs_skqd: %d orbitals, %d alpha, %d beta", n_orb, n_alpha, n_beta)

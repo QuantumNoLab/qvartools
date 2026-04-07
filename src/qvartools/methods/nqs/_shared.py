@@ -109,9 +109,7 @@ def extract_orbital_counts(
         from either ``mol_info`` or ``hamiltonian.integrals``.
     """
     _integrals = getattr(hamiltonian, "integrals", None)
-    n_orb = mol_info.get(
-        "n_orbitals", _integrals.n_orbitals if _integrals else None
-    )
+    n_orb = mol_info.get("n_orbitals", _integrals.n_orbitals if _integrals else None)
     n_alpha = mol_info.get("n_alpha", _integrals.n_alpha if _integrals else None)
     n_beta = mol_info.get("n_beta", _integrals.n_beta if _integrals else None)
     if n_orb is None or n_alpha is None or n_beta is None:

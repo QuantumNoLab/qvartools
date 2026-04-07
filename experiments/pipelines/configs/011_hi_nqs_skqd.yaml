@@ -1,0 +1,40 @@
+# 011_hi_nqs_skqd: HI+NQS+SKQD method (iterative + Krylov expansion)
+#
+# Each top-level section corresponds to a script in 011_hi_nqs_skqd/.
+# Defaults are tuned for H2 smoke testing — scale up for larger systems.
+
+default:
+  molecule: h2
+  device: auto
+  n_iterations: 5
+  n_samples_per_iter: 2000
+  n_batches: 3
+  max_configs_per_batch: 2000
+  energy_tol: 1.0e-5
+  nqs_lr: 1.0e-3
+  nqs_train_epochs: 30
+  embed_dim: 64
+  n_heads: 4
+  n_layers: 4
+  temperature: 1.0
+  krylov_max_new: 200
+  krylov_n_ref: 10
+  use_ibm_solver: false   # baseline keeps IBM off
+
+ibm_on:
+  molecule: h2
+  device: auto
+  n_iterations: 5
+  n_samples_per_iter: 2000
+  n_batches: 3
+  max_configs_per_batch: 2000
+  energy_tol: 1.0e-5
+  nqs_lr: 1.0e-3
+  nqs_train_epochs: 30
+  embed_dim: 64
+  n_heads: 4
+  n_layers: 4
+  temperature: 1.0
+  krylov_max_new: 200
+  krylov_n_ref: 10
+  use_ibm_solver: true    # enable IBM solver + S-CORE recovery

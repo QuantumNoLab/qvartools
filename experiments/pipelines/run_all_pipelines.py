@@ -34,7 +34,12 @@ PIPELINES = [
         "DCI+Krylov-C",
         "DCI → Classical Krylov",
     ),
-    ("001_dci", "001_dci/dci_krylov_quantum.py", "DCI+Krylov-Q", "DCI → Quantum Krylov"),
+    (
+        "001_dci",
+        "001_dci/dci_krylov_quantum.py",
+        "DCI+Krylov-Q",
+        "DCI → Quantum Krylov",
+    ),
     ("001_dci", "001_dci/dci_sqd.py", "DCI+SQD", "DCI → SQD"),
     (
         "002_nf_dci",
@@ -158,6 +163,49 @@ PIPELINES = [
         "009_vqe/vqe_adapt.py",
         "ADAPT-VQE",
         "CUDA-QX ADAPT-VQE with GSD operator pool",
+    ),
+    # ---- Method-as-pipeline catalog (010-099) ----
+    (
+        "010_hi_nqs_sqd",
+        "010_hi_nqs_sqd/default.py",
+        "HI-NQS-SQD/default",
+        "HI+NQS+SQD baseline (auto IBM detect)",
+    ),
+    (
+        "010_hi_nqs_sqd",
+        "010_hi_nqs_sqd/pt2.py",
+        "HI-NQS-SQD/pt2",
+        "HI+NQS+SQD with PT2 selection + temperature annealing",
+    ),
+    (
+        "010_hi_nqs_sqd",
+        "010_hi_nqs_sqd/ibm_off.py",
+        "HI-NQS-SQD/ibm_off",
+        "HI+NQS+SQD forced GPU fallback (no IBM)",
+    ),
+    (
+        "011_hi_nqs_skqd",
+        "011_hi_nqs_skqd/default.py",
+        "HI-NQS-SKQD/default",
+        "HI+NQS+SKQD baseline with Krylov expansion",
+    ),
+    (
+        "011_hi_nqs_skqd",
+        "011_hi_nqs_skqd/ibm_on.py",
+        "HI-NQS-SKQD/ibm_on",
+        "HI+NQS+SKQD with IBM solver + S-CORE",
+    ),
+    (
+        "012_nqs_sqd",
+        "012_nqs_sqd/default.py",
+        "NQS-SQD/default",
+        "Two-stage NQS+SQD (no iteration)",
+    ),
+    (
+        "013_nqs_skqd",
+        "013_nqs_skqd/default.py",
+        "NQS-SKQD/default",
+        "Two-stage NQS+SKQD with Krylov expansion",
     ),
 ]
 

@@ -159,7 +159,11 @@ def main() -> None:
 
     history = pipeline.train_flow_nqs(progress=True)
     n_epochs = len(history.get("total_loss", []))
-    basis = pipeline.extract_and_select_basis()
+    # `extract_and_select_basis()` returns float32 (inherited from the
+    # NF trainer's accumulated_basis). `run_hi_nqs_sqd(initial_basis=...)`
+    # requires integer/bool dtype for the binary occupation vectors, so
+    # cast before passing.
+    basis = pipeline.extract_and_select_basis().long()
     nf_dci_energy = pipeline.results.get("final_energy")
     nf_time = time.perf_counter() - t_start
 

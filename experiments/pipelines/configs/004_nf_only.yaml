@@ -1,4 +1,4 @@
-# 03_nf_dci_pt2: NF training + Direct-CI merge + PT2 expansion pipelines
+# 004_nf_only: NF-only pipelines (ablation, no DCI merge)
 
 molecule: h2
 
@@ -9,10 +9,6 @@ entropy_weight: 0.1
 max_epochs: 150
 min_epochs: 50
 samples_per_batch: 1000
-
-# PT2 expansion parameters
-pt2_max_new: 500
-pt2_n_ref: 10
 
 # Krylov parameters
 max_krylov_dim: 10

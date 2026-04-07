@@ -1,4 +1,4 @@
-# 05_hf_only: HF-only reference state pipelines (baseline)
+# 005_hf_only: HF-only reference state pipelines (baseline)
 
 molecule: h2
 

@@ -18,13 +18,13 @@ _spec.loader.exec_module(rap)
 
 def test_vqe_pipelines_are_registered() -> None:
     scripts = {script for _, script, _, _ in rap.PIPELINES}
-    assert "09_vqe/vqe_uccsd.py" in scripts
-    assert "09_vqe/vqe_adapt.py" in scripts
+    assert "009_vqe/vqe_uccsd.py" in scripts
+    assert "009_vqe/vqe_adapt.py" in scripts
 
 
 def test_vqe_pipeline_scripts_exist() -> None:
-    assert (PIPELINES_DIR / "09_vqe" / "vqe_uccsd.py").is_file()
-    assert (PIPELINES_DIR / "09_vqe" / "vqe_adapt.py").is_file()
+    assert (PIPELINES_DIR / "009_vqe" / "vqe_uccsd.py").is_file()
+    assert (PIPELINES_DIR / "009_vqe" / "vqe_adapt.py").is_file()
 
 
 def test_skip_quantum_filters_vqe_pipelines() -> None:

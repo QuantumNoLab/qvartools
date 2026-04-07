@@ -1,4 +1,4 @@
-# 01_dci: Direct-CI (HF + singles + doubles) pipelines
+# 001_dci: Direct-CI (HF + singles + doubles) pipelines
 # No NF training. Basis generated deterministically.
 
 molecule: h2

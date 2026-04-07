@@ -1,4 +1,4 @@
-# 06_iterative_nqs: Iterative NQS with eigenvector feedback pipelines
+# 006_iterative_nqs: Iterative NQS with eigenvector feedback pipelines
 
 molecule: h2
 

@@ -1,4 +1,4 @@
-# 04_nf_only: NF-only pipelines (ablation, no DCI merge)
+# 002_nf_dci: NF training + Direct-CI merge pipelines
 
 molecule: h2
 

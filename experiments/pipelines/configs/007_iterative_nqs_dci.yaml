@@ -1,4 +1,4 @@
-# 07_iterative_nqs_dci: Iterative NQS + DCI seed pipelines
+# 007_iterative_nqs_dci: Iterative NQS + DCI seed pipelines
 
 molecule: h2
 

@@ -3,7 +3,7 @@
 Usage:
     python run_all_pipelines.py h2
     python run_all_pipelines.py lih --skip-quantum   # skip CUDA-Q pipelines
-    python run_all_pipelines.py h2 --only 01 02      # run only groups 01 and 02
+    python run_all_pipelines.py h2 --only 001 002    # run only groups 001 and 002
     python run_all_pipelines.py h2 --skip-iterative  # skip slow iterative pipelines
 """
 
@@ -29,135 +29,183 @@ CHEMICAL_ACCURACY_MHA = 1.6
 PIPELINES = [
     # (group, script_path, short_name, description)
     (
-        "01_dci",
-        "01_dci/dci_krylov_classical.py",
+        "001_dci",
+        "001_dci/dci_krylov_classical.py",
         "DCI+Krylov-C",
         "DCI → Classical Krylov",
     ),
-    ("01_dci", "01_dci/dci_krylov_quantum.py", "DCI+Krylov-Q", "DCI → Quantum Krylov"),
-    ("01_dci", "01_dci/dci_sqd.py", "DCI+SQD", "DCI → SQD"),
     (
-        "02_nf_dci",
-        "02_nf_dci/nf_dci_krylov_classical.py",
+        "001_dci",
+        "001_dci/dci_krylov_quantum.py",
+        "DCI+Krylov-Q",
+        "DCI → Quantum Krylov",
+    ),
+    ("001_dci", "001_dci/dci_sqd.py", "DCI+SQD", "DCI → SQD"),
+    (
+        "002_nf_dci",
+        "002_nf_dci/nf_dci_krylov_classical.py",
         "NF+DCI+Krylov-C",
         "NF+DCI → Classical Krylov",
     ),
     (
-        "02_nf_dci",
-        "02_nf_dci/nf_dci_krylov_quantum.py",
+        "002_nf_dci",
+        "002_nf_dci/nf_dci_krylov_quantum.py",
         "NF+DCI+Krylov-Q",
         "NF+DCI → Quantum Krylov",
     ),
-    ("02_nf_dci", "02_nf_dci/nf_dci_sqd.py", "NF+DCI+SQD", "NF+DCI → SQD"),
+    ("002_nf_dci", "002_nf_dci/nf_dci_sqd.py", "NF+DCI+SQD", "NF+DCI → SQD"),
     (
-        "03_nf_dci_pt2",
-        "03_nf_dci_pt2/nf_dci_pt2_krylov_classical.py",
+        "003_nf_dci_pt2",
+        "003_nf_dci_pt2/nf_dci_pt2_krylov_classical.py",
         "NF+DCI+PT2+Krylov-C",
         "NF+DCI+PT2 → Classical Krylov",
     ),
     (
-        "03_nf_dci_pt2",
-        "03_nf_dci_pt2/nf_dci_pt2_krylov_quantum.py",
+        "003_nf_dci_pt2",
+        "003_nf_dci_pt2/nf_dci_pt2_krylov_quantum.py",
         "NF+DCI+PT2+Krylov-Q",
         "NF+DCI+PT2 → Quantum Krylov",
     ),
     (
-        "03_nf_dci_pt2",
-        "03_nf_dci_pt2/nf_dci_pt2_sqd.py",
+        "003_nf_dci_pt2",
+        "003_nf_dci_pt2/nf_dci_pt2_sqd.py",
         "NF+DCI+PT2+SQD",
         "NF+DCI+PT2 → SQD",
     ),
     (
-        "04_nf_only",
-        "04_nf_only/nf_krylov_classical.py",
+        "004_nf_only",
+        "004_nf_only/nf_krylov_classical.py",
         "NF+Krylov-C",
         "NF-only → Classical Krylov",
     ),
     (
-        "04_nf_only",
-        "04_nf_only/nf_krylov_quantum.py",
+        "004_nf_only",
+        "004_nf_only/nf_krylov_quantum.py",
         "NF+Krylov-Q",
         "NF-only → Quantum Krylov",
     ),
-    ("04_nf_only", "04_nf_only/nf_sqd.py", "NF+SQD", "NF-only → SQD"),
+    ("004_nf_only", "004_nf_only/nf_sqd.py", "NF+SQD", "NF-only → SQD"),
     (
-        "05_hf_only",
-        "05_hf_only/hf_krylov_classical.py",
+        "005_hf_only",
+        "005_hf_only/hf_krylov_classical.py",
         "HF+Krylov-C",
         "HF-only → Classical Krylov",
     ),
     (
-        "05_hf_only",
-        "05_hf_only/hf_krylov_quantum.py",
+        "005_hf_only",
+        "005_hf_only/hf_krylov_quantum.py",
         "HF+Krylov-Q",
         "HF-only → Quantum Krylov",
     ),
-    ("05_hf_only", "05_hf_only/hf_sqd.py", "HF+SQD", "HF-only → SQD"),
+    ("005_hf_only", "005_hf_only/hf_sqd.py", "HF+SQD", "HF-only → SQD"),
     (
-        "06_iterative_nqs",
-        "06_iterative_nqs/iter_nqs_krylov_classical.py",
+        "006_iterative_nqs",
+        "006_iterative_nqs/iter_nqs_krylov_classical.py",
         "Iter+Krylov-C",
         "Iterative NQS → Classical Krylov",
     ),
     (
-        "06_iterative_nqs",
-        "06_iterative_nqs/iter_nqs_krylov_quantum.py",
+        "006_iterative_nqs",
+        "006_iterative_nqs/iter_nqs_krylov_quantum.py",
         "Iter+Krylov-Q",
         "Iterative NQS → Quantum Krylov",
     ),
     (
-        "06_iterative_nqs",
-        "06_iterative_nqs/iter_nqs_sqd.py",
+        "006_iterative_nqs",
+        "006_iterative_nqs/iter_nqs_sqd.py",
         "Iter+SQD",
         "Iterative NQS → SQD",
     ),
     (
-        "07_iterative_nqs_dci",
-        "07_iterative_nqs_dci/iter_nqs_dci_krylov_classical.py",
+        "007_iterative_nqs_dci",
+        "007_iterative_nqs_dci/iter_nqs_dci_krylov_classical.py",
         "Iter+DCI+Krylov-C",
         "Iterative NQS+DCI → Classical Krylov",
     ),
     (
-        "07_iterative_nqs_dci",
-        "07_iterative_nqs_dci/iter_nqs_dci_krylov_quantum.py",
+        "007_iterative_nqs_dci",
+        "007_iterative_nqs_dci/iter_nqs_dci_krylov_quantum.py",
         "Iter+DCI+Krylov-Q",
         "Iterative NQS+DCI → Quantum Krylov",
     ),
     (
-        "07_iterative_nqs_dci",
-        "07_iterative_nqs_dci/iter_nqs_dci_sqd.py",
+        "007_iterative_nqs_dci",
+        "007_iterative_nqs_dci/iter_nqs_dci_sqd.py",
         "Iter+DCI+SQD",
         "Iterative NQS+DCI → SQD",
     ),
     (
-        "08_iterative_nqs_dci_pt2",
-        "08_iterative_nqs_dci_pt2/iter_nqs_dci_pt2_krylov_classical.py",
+        "008_iterative_nqs_dci_pt2",
+        "008_iterative_nqs_dci_pt2/iter_nqs_dci_pt2_krylov_classical.py",
         "Iter+DCI+PT2+Krylov-C",
         "Iterative NQS+DCI+PT2 → Classical Krylov",
     ),
     (
-        "08_iterative_nqs_dci_pt2",
-        "08_iterative_nqs_dci_pt2/iter_nqs_dci_pt2_krylov_quantum.py",
+        "008_iterative_nqs_dci_pt2",
+        "008_iterative_nqs_dci_pt2/iter_nqs_dci_pt2_krylov_quantum.py",
         "Iter+DCI+PT2+Krylov-Q",
         "Iterative NQS+DCI+PT2 → Quantum Krylov",
     ),
     (
-        "08_iterative_nqs_dci_pt2",
-        "08_iterative_nqs_dci_pt2/iter_nqs_dci_pt2_sqd.py",
+        "008_iterative_nqs_dci_pt2",
+        "008_iterative_nqs_dci_pt2/iter_nqs_dci_pt2_sqd.py",
         "Iter+DCI+PT2+SQD",
         "Iterative NQS+DCI+PT2 → SQD",
     ),
     (
-        "09_vqe",
-        "09_vqe/vqe_uccsd.py",
+        "009_vqe",
+        "009_vqe/vqe_uccsd.py",
         "VQE-UCCSD",
         "CUDA-QX VQE with UCCSD ansatz",
     ),
     (
-        "09_vqe",
-        "09_vqe/vqe_adapt.py",
+        "009_vqe",
+        "009_vqe/vqe_adapt.py",
         "ADAPT-VQE",
         "CUDA-QX ADAPT-VQE with GSD operator pool",
+    ),
+    # ---- Method-as-pipeline catalog (010-099) ----
+    (
+        "010_hi_nqs_sqd",
+        "010_hi_nqs_sqd/default.py",
+        "HI-NQS-SQD/default",
+        "HI+NQS+SQD baseline (auto IBM detect)",
+    ),
+    (
+        "010_hi_nqs_sqd",
+        "010_hi_nqs_sqd/pt2.py",
+        "HI-NQS-SQD/pt2",
+        "HI+NQS+SQD with PT2 selection + temperature annealing",
+    ),
+    (
+        "010_hi_nqs_sqd",
+        "010_hi_nqs_sqd/ibm_off.py",
+        "HI-NQS-SQD/ibm_off",
+        "HI+NQS+SQD forced GPU fallback (no IBM)",
+    ),
+    (
+        "011_hi_nqs_skqd",
+        "011_hi_nqs_skqd/default.py",
+        "HI-NQS-SKQD/default",
+        "HI+NQS+SKQD baseline with Krylov expansion",
+    ),
+    (
+        "011_hi_nqs_skqd",
+        "011_hi_nqs_skqd/ibm_on.py",
+        "HI-NQS-SKQD/ibm_on",
+        "HI+NQS+SKQD with IBM solver + S-CORE",
+    ),
+    (
+        "012_nqs_sqd",
+        "012_nqs_sqd/default.py",
+        "NQS-SQD/default",
+        "Two-stage NQS+SQD (no iteration)",
+    ),
+    (
+        "013_nqs_skqd",
+        "013_nqs_skqd/default.py",
+        "NQS-SKQD/default",
+        "Two-stage NQS+SKQD with Krylov expansion",
     ),
 ]
 
@@ -276,7 +324,7 @@ def main() -> None:
         "--only",
         nargs="*",
         default=None,
-        help="Run only these groups (e.g., --only 01 02 04)",
+        help="Run only these groups (e.g., --only 001 002 004)",
     )
     parser.add_argument(
         "--skip-quantum",
@@ -316,6 +364,21 @@ def main() -> None:
         print("  FCI reference unavailable for this system.")
     print(f"{'=' * 80}\n")
 
+    # Detect the pre-2026-04-07 2-digit --only format and print a migration
+    # hint before silently filtering everything out. The catalog now uses
+    # 3-digit prefixes (001-013), so "01 02 04" matches no group.
+    if args.only:
+        legacy_2digit = [o for o in args.only if len(o) == 2 and o.isdigit()]
+        if legacy_2digit:
+            suggested = " ".join("0" + o for o in legacy_2digit)
+            print(
+                f"WARNING: --only values {legacy_2digit} use the old 2-digit "
+                f"format. Pipeline folders now use 3-digit prefixes (001-013). "
+                f"No groups will match these values. Use --only "
+                f"{suggested} instead.",
+                file=sys.stderr,
+            )
+
     # Filter pipelines
     pipelines_to_run = []
     for group, script, name, desc in PIPELINES:
@@ -323,9 +386,11 @@ def main() -> None:
 
         if args.only and group_num not in args.only:
             continue
-        if args.skip_quantum and ("Krylov-Q" in name or group == "09_vqe"):
+        if args.skip_quantum and ("Krylov-Q" in name or group == "009_vqe"):
             continue
-        if args.skip_iterative and group.startswith(("06", "07", "08")):
+        if args.skip_iterative and group.startswith(
+            ("006", "007", "008", "010", "011")
+        ):
             continue
 
         pipelines_to_run.append((group, script, name, desc))

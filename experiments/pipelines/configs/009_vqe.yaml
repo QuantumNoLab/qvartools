@@ -1,4 +1,4 @@
-# 09_vqe: CUDA-QX VQE pipelines
+# 009_vqe: CUDA-QX VQE pipelines
 
 molecule: h2
 optimizer: cobyla

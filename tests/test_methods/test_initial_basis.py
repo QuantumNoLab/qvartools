@@ -97,6 +97,7 @@ def _make_initial_basis(n_configs=3):
 class TestRunHiNqsSqdInitialBasis:
     """Test initial_basis kwarg for run_hi_nqs_sqd."""
 
+    @patch("qvartools.methods.nqs.hi_nqs_sqd._IBM_SQD_AVAILABLE", False)
     @patch("qvartools.methods.nqs.hi_nqs_sqd.gpu_solve_fermion")
     def test_accepts_initial_basis_none(
         self, mock_solver, mol_info, minimal_config_sqd
@@ -116,6 +117,7 @@ class TestRunHiNqsSqdInitialBasis:
         assert isinstance(result, SolverResult)
         assert result.method == "HI+NQS+SQD"
 
+    @patch("qvartools.methods.nqs.hi_nqs_sqd._IBM_SQD_AVAILABLE", False)
     @patch("qvartools.methods.nqs.hi_nqs_sqd.gpu_solve_fermion")
     def test_accepts_initial_basis_tensor(
         self, mock_solver, mol_info, minimal_config_sqd
@@ -137,6 +139,7 @@ class TestRunHiNqsSqdInitialBasis:
         # With warm-start, final basis should be non-empty
         assert result.metadata["final_basis_size"] > 0
 
+    @patch("qvartools.methods.nqs.hi_nqs_sqd._IBM_SQD_AVAILABLE", False)
     @patch("qvartools.methods.nqs.hi_nqs_sqd.gpu_solve_fermion")
     def test_initial_basis_deduplicates(
         self, mock_solver, mol_info, minimal_config_sqd

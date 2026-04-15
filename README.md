@@ -100,18 +100,25 @@ print(f"Energy: {results['final_energy']:.10f} Ha")
 ### Running experiment pipelines
 
 ```bash
-# Run a single pipeline on H2
-python experiments/pipelines/01_dci/dci_krylov_classical.py h2 --device cuda
+# Run a single ablation pipeline on H2
+python experiments/pipelines/001_dci/dci_krylov_classical.py h2 --device cuda
 
-# Run all 24 pipelines and compare
+# Run a method-as-pipeline benchmark (010+ catalog)
+python experiments/pipelines/010_hi_nqs_sqd/default.py h2 --device cuda
+python experiments/pipelines/010_hi_nqs_sqd/pt2.py h2 --device cuda
+
+# Run all 33 pipelines and compare
 python experiments/pipelines/run_all_pipelines.py h2 --device cuda
+
+# Filter by group prefix (3-digit)
+python experiments/pipelines/run_all_pipelines.py h2 --only 001 005 010
 
 # Skip quantum or iterative pipelines for faster validation
 python experiments/pipelines/run_all_pipelines.py h2 --skip-quantum --skip-iterative
 
 # Run with a YAML config override
-python experiments/pipelines/02_nf_dci/nf_dci_krylov_classical.py lih \
-    --config experiments/pipelines/configs/02_nf_dci.yaml --max-epochs 200
+python experiments/pipelines/002_nf_dci/nf_dci_krylov_classical.py lih \
+    --config experiments/pipelines/configs/002_nf_dci.yaml --max-epochs 200
 ```
 
 ## Package Architecture

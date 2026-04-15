@@ -1,4 +1,4 @@
-# 08_iterative_nqs_dci_pt2: Iterative NQS + DCI seed + PT2 expansion pipelines
+# 008_iterative_nqs_dci_pt2: Iterative NQS + DCI seed + PT2 expansion pipelines
 
 molecule: h2
 

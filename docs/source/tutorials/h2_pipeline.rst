@@ -115,11 +115,14 @@ The same pipeline can be run as a standalone experiment script:
 
 .. code-block:: bash
 
-   python experiments/pipelines/02_nf_dci/nf_dci_krylov_classical.py h2 --device cuda
+   python experiments/pipelines/002_nf_dci/nf_dci_krylov_classical.py h2 --device cuda
 
    # Or with a YAML config
-   python experiments/pipelines/02_nf_dci/nf_dci_krylov_classical.py h2 \
-       --config experiments/pipelines/configs/02_nf_dci.yaml
+   python experiments/pipelines/002_nf_dci/nf_dci_krylov_classical.py h2 \
+       --config experiments/pipelines/configs/002_nf_dci.yaml
 
-   # Run all 24 pipelines and compare
+   # Run all 33 pipelines (001-013) and compare
    python experiments/pipelines/run_all_pipelines.py h2 --device cuda
+
+   # Or run just the new method-as-pipeline catalog (010-013)
+   python experiments/pipelines/run_all_pipelines.py h2 --only 010 011 012 013

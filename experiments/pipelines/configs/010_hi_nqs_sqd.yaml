@@ -1,0 +1,56 @@
+# 010_hi_nqs_sqd: HI+NQS+SQD method (iterative, optional PT2/IBM)
+#
+# Each top-level section corresponds to a script in 010_hi_nqs_sqd/.
+# Defaults are tuned for H2 smoke testing — scale up for larger systems.
+
+default:
+  molecule: h2
+  device: auto
+  n_iterations: 5
+  n_samples_per_iter: 2000
+  n_batches: 3
+  max_configs_per_batch: 2000
+  energy_tol: 1.0e-5
+  nqs_lr: 1.0e-3
+  nqs_train_epochs: 30
+  embed_dim: 64
+  n_heads: 4
+  n_layers: 4
+  temperature: 1.0
+  use_ibm_solver: null   # auto-enable when qiskit_addon_sqd is installed
+
+pt2:
+  molecule: h2
+  device: auto
+  n_iterations: 5
+  n_samples_per_iter: 2000
+  n_batches: 3
+  max_configs_per_batch: 2000
+  energy_tol: 1.0e-5
+  nqs_lr: 1.0e-3
+  nqs_train_epochs: 30
+  embed_dim: 64
+  n_heads: 4
+  n_layers: 4
+  use_pt2_selection: true
+  pt2_top_k: 1000
+  max_basis_size: 5000
+  initial_temperature: 1.5
+  final_temperature: 0.3
+  use_ibm_solver: null
+
+ibm_off:
+  molecule: h2
+  device: auto
+  n_iterations: 5
+  n_samples_per_iter: 2000
+  n_batches: 3
+  max_configs_per_batch: 2000
+  energy_tol: 1.0e-5
+  nqs_lr: 1.0e-3
+  nqs_train_epochs: 30
+  embed_dim: 64
+  n_heads: 4
+  n_layers: 4
+  temperature: 1.0
+  use_ibm_solver: false   # force GPU fallback (no IBM solve_fermion)

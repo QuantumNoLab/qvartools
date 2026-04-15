@@ -146,6 +146,42 @@ nvcc -std=c++17 -O3 \
 # ARM64: no cross-compilation needed (native on DGX Spark)
 ```
 
+## Update 2026-04-07: parallel CuPy path + correction on speedup interpretation
+
+**Correction to the speedup table above**: re-reading arXiv:2601.16169 carefully,
+AMD-HPC/amd-sbd's 95x is measured on **MI250X (AMD GPU, OpenMP offload)**.
+On **GB200** the same library only achieves **2.64x** — a 36x gap between the
+two numbers in the same paper. The "95x" cannot be naively claimed for any
+NVIDIA target. For DGX Spark GB10 (weaker than GB200 in both bandwidth and
+compute), realistic expectation from amd-sbd is **≤2.64x or less**. This
+significantly narrows the speedup advantage of the C++/sbd path over a
+well-written native Python (CuPy) implementation on NVIDIA hardware.
+
+A pure-CuPy alternative path (factored-space sigma vector + Davidson driver)
+is now tracked in **Issue #38**. Motivations:
+
+1. **No C++ build / MPI strip / sm_121 compilation risk** — pure-Python, runs
+   wherever CuPy works. Eliminates the entire toolchain risk surface from this
+   ADR.
+2. **Davidson with diagonal preconditioner is non-negotiable for multireference
+   chemistry** (Cr₂ CAS(12,18) through CAS(12,36), N₂ dissociation, open-shell).
+   Lanczos has ghost-eigenvalue failure modes for near-degenerate spectra;
+   PySCF uses Davidson for FCI for this reason. **Whichever backend wins (sbd
+   or CuPy), proper Davidson must be implemented before Cr₂ work begins.**
+   This commitment is also recorded in `memory/project_phase2b_davidson_commitment.md`.
+3. **Insurance path**: if sbd nanobind Phase 2 hits compilation blockers
+   (CUDA 13.0 CCCL relocation, MPI strip, sm_121 SASS compatibility), Issue
+   #38 can carry the long-term work independently.
+
+The sbd path described in this ADR remains active — Issue #38 is **parallel,
+not a replacement**. Re-evaluate priorities once both Phase 1 prototypes have
+measured numbers on actual DGX Spark GB10 hardware.
+
+**Cross-references added 2026-04-07**:
+- Issue #38: CuPy factored-space Davidson tracking (parallel path)
+- `memory/project_phase2b_davidson_commitment.md`: Phase 2b non-negotiable commitment
+- `memory/feedback_gpu_sku_extrapolation.md`: lesson on misreading vendor speedup claims
+
 ## References
 
 - r-ccs-cms/sbd: https://github.com/r-ccs-cms/sbd

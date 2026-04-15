@@ -282,12 +282,12 @@ ruff format --check src/ tests/ experiments/
 # 5. End-to-end pipeline validation (CRITICAL)
 cd experiments/pipelines
 python run_all_pipelines.py h2 --device cuda
-# Expected: 24/24 pipelines pass
+# Expected: 33/33 pipelines pass (post-2026-04-07 catalog with 010-013)
 
 # 6. Performance regression check
 # Run the specific pipeline before and after, compare wall time
-python pipelines/01_dci/dci_sqd.py h2 --device cuda   # PR-A
-python pipelines/01_dci/dci_krylov_classical.py h2 --device cuda  # PR-B
+python pipelines/001_dci/dci_sqd.py h2 --device cuda   # PR-A
+python pipelines/001_dci/dci_krylov_classical.py h2 --device cuda  # PR-B
 ```
 
 ---

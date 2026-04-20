@@ -117,6 +117,85 @@ class TestComputePT2Scores:
         assert np.all(scores == 0.0)
 
 
+@pytest.mark.pyscf
+class TestComputeEPT2:
+    """Test EN-PT2 energy correction."""
+
+    @pytest.fixture()
+    def h2_valid_configs(self, h2_hamiltonian):
+        """Return only particle-number-valid configs for H2."""
+        ham = h2_hamiltonian
+        n_orb = ham.integrals.n_orbitals
+        n_alpha = ham.integrals.n_alpha
+        n_beta = ham.integrals.n_beta
+        all_configs = ham._generate_all_configs()
+        # Filter for correct particle number
+        alpha_count = all_configs[:, :n_orb].sum(dim=1)
+        beta_count = all_configs[:, n_orb:].sum(dim=1)
+        valid_mask = (alpha_count == n_alpha) & (beta_count == n_beta)
+        return all_configs[valid_mask]
+
+    def test_import(self):
+        from qvartools.methods.nqs._pt2_helpers import compute_e_pt2
+
+        assert callable(compute_e_pt2)
+
+    def test_returns_float(self, h2_hamiltonian):
+        from qvartools.methods.nqs._pt2_helpers import compute_e_pt2
+
+        ham = h2_hamiltonian
+        # Use HF state as 1-config basis
+        hf = ham.get_hf_state().unsqueeze(0)
+        e_var = float(ham.diagonal_element(hf[0]))
+        e_pt2 = compute_e_pt2(hf, np.array([1.0]), ham, e_var)
+        assert isinstance(e_pt2, float)
+
+    def test_e_pt2_is_negative(self, h2_hamiltonian):
+        """E_PT2 from HF reference should be negative (lowers energy)."""
+        from qvartools.methods.nqs._pt2_helpers import compute_e_pt2
+
+        ham = h2_hamiltonian
+        hf = ham.get_hf_state().unsqueeze(0)
+        e_var = float(ham.diagonal_element(hf[0]))
+        e_pt2 = compute_e_pt2(hf, np.array([1.0]), ham, e_var)
+        assert e_pt2 < 0, f"E_PT2 should be negative, got {e_pt2}"
+
+    def test_corrected_energy_closer_to_fci(self, h2_hamiltonian, h2_valid_configs):
+        """E_var + E_PT2 should be closer to FCI than E_var alone."""
+        from qvartools.methods.nqs._pt2_helpers import compute_e_pt2
+
+        ham = h2_hamiltonian
+        valid = h2_valid_configs
+        H = ham.matrix_elements_fast(valid).numpy()
+        eigvals, _ = np.linalg.eigh(H)
+        e_fci = eigvals[0]
+
+        # Use HF as 1-config basis (guaranteed lowest diagonal energy)
+        hf = ham.get_hf_state().unsqueeze(0)
+        e_var = float(ham.diagonal_element(hf[0]))
+        e_pt2 = compute_e_pt2(hf, np.array([1.0]), ham, e_var)
+        e_corrected = e_var + e_pt2
+
+        error_var = abs(e_var - e_fci)
+        error_corrected = abs(e_corrected - e_fci)
+        assert error_corrected < error_var, (
+            f"E_var+E_PT2 ({e_corrected:.8f}, err={error_corrected:.6f}) "
+            f"should be closer to FCI ({e_fci:.8f}) than E_var ({e_var:.8f}, err={error_var:.6f})"
+        )
+
+    def test_full_basis_gives_zero(self, h2_hamiltonian, h2_valid_configs):
+        """When basis spans all valid configs, E_PT2 should be ~0."""
+        from qvartools.methods.nqs._pt2_helpers import compute_e_pt2
+
+        ham = h2_hamiltonian
+        valid = h2_valid_configs
+        H = ham.matrix_elements_fast(valid).numpy()
+        eigvals, eigvecs = np.linalg.eigh(H)
+
+        e_pt2 = compute_e_pt2(valid, eigvecs[:, 0], ham, eigvals[0])
+        assert abs(e_pt2) < 1e-10, f"Full-basis E_PT2 should be ~0, got {e_pt2}"
+
+
 class TestEvictByCoefficient:
     """Test ASCI-style coefficient-based eviction (no PySCF needed)."""
 
@@ -431,6 +510,177 @@ class TestRunHiNqsSqdPT2Integration:
         # Verifying actual temperature values would require patching
         # AutoregressiveTransformer.sample, which is fragile on small systems.
         assert result.method == "HI+NQS+SQD"
+
+
+# ---------------------------------------------------------------------------
+# P3b: E_PT2 integration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.pyscf
+class TestEPT2Integration:
+    """Test E_PT2 correction integrated into run_hi_nqs_sqd."""
+
+    @pytest.fixture()
+    def minimal_mol_info(self, h2_hamiltonian):
+        ham = h2_hamiltonian
+        return {
+            "n_orbitals": ham.integrals.n_orbitals,
+            "n_alpha": ham.integrals.n_alpha,
+            "n_beta": ham.integrals.n_beta,
+            "n_qubits": 2 * ham.integrals.n_orbitals,
+        }
+
+    def test_config_has_compute_pt2_correction_field(self):
+        """HINQSSQDConfig should have compute_pt2_correction field."""
+        cfg = HINQSSQDConfig()
+        assert hasattr(cfg, "compute_pt2_correction")
+        assert cfg.compute_pt2_correction is False  # opt-in
+
+    def test_result_metadata_contains_e_pt2(self, h2_hamiltonian, minimal_mol_info):
+        """When compute_pt2_correction=True, metadata should have e_pt2."""
+        from unittest.mock import patch
+
+        from qvartools.methods.nqs.hi_nqs_sqd import run_hi_nqs_sqd
+
+        cfg = HINQSSQDConfig(
+            n_iterations=2,
+            n_samples_per_iter=10,
+            n_batches=1,
+            nqs_train_epochs=1,
+            embed_dim=16,
+            n_heads=2,
+            n_layers=1,
+            compute_pt2_correction=True,
+        )
+
+        # Mock must return coeffs matching batch size
+        def mock_solver(batch_configs, hamiltonian):
+            n = batch_configs.shape[0]
+            coeffs = np.zeros(n)
+            coeffs[0] = 1.0
+            return (-1.0, coeffs, (np.array([0.5]), np.array([0.5])))
+
+        with (
+            patch("qvartools.methods.nqs.hi_nqs_sqd._IBM_SQD_AVAILABLE", False),
+            patch(
+                "qvartools.methods.nqs.hi_nqs_sqd.gpu_solve_fermion",
+                side_effect=mock_solver,
+            ),
+        ):
+            result = run_hi_nqs_sqd(h2_hamiltonian, minimal_mol_info, config=cfg)
+
+        assert "e_pt2" in result.metadata
+        assert "corrected_energy" in result.metadata
+        assert isinstance(result.metadata["e_pt2"], float)
+        assert isinstance(result.metadata["corrected_energy"], float)
+
+    def test_e_pt2_off_has_no_correction(self, h2_hamiltonian, minimal_mol_info):
+        """When compute_pt2_correction=False, metadata should NOT have e_pt2."""
+        from unittest.mock import patch
+
+        from qvartools.methods.nqs.hi_nqs_sqd import run_hi_nqs_sqd
+
+        cfg = HINQSSQDConfig(
+            n_iterations=1,
+            n_samples_per_iter=10,
+            n_batches=1,
+            nqs_train_epochs=1,
+            embed_dim=16,
+            n_heads=2,
+            n_layers=1,
+            compute_pt2_correction=False,
+        )
+
+        mock_return = (-1.0, np.array([1.0]), (np.array([0.5]), np.array([0.5])))
+        with (
+            patch("qvartools.methods.nqs.hi_nqs_sqd._IBM_SQD_AVAILABLE", False),
+            patch(
+                "qvartools.methods.nqs.hi_nqs_sqd.gpu_solve_fermion",
+                return_value=mock_return,
+            ),
+        ):
+            result = run_hi_nqs_sqd(h2_hamiltonian, minimal_mol_info, config=cfg)
+
+        assert "e_pt2" not in result.metadata
+
+    def test_metadata_contains_pt2_e0_and_wall_time(
+        self, h2_hamiltonian, minimal_mol_info
+    ):
+        """Metadata should include pt2_e0 (full-basis energy) and wall time."""
+        from unittest.mock import patch
+
+        from qvartools.methods.nqs.hi_nqs_sqd import run_hi_nqs_sqd
+
+        cfg = HINQSSQDConfig(
+            n_iterations=2,
+            n_samples_per_iter=10,
+            n_batches=1,
+            nqs_train_epochs=1,
+            embed_dim=16,
+            n_heads=2,
+            n_layers=1,
+            compute_pt2_correction=True,
+        )
+
+        def mock_solver(batch_configs, hamiltonian):
+            n = batch_configs.shape[0]
+            coeffs = np.zeros(n)
+            coeffs[0] = 1.0
+            return (-1.0, coeffs, (np.array([0.5]), np.array([0.5])))
+
+        with (
+            patch("qvartools.methods.nqs.hi_nqs_sqd._IBM_SQD_AVAILABLE", False),
+            patch(
+                "qvartools.methods.nqs.hi_nqs_sqd.gpu_solve_fermion",
+                side_effect=mock_solver,
+            ),
+        ):
+            result = run_hi_nqs_sqd(h2_hamiltonian, minimal_mol_info, config=cfg)
+
+        assert "pt2_e0" in result.metadata, "metadata missing pt2_e0"
+        assert "pt2_wall_time" in result.metadata, "metadata missing pt2_wall_time"
+        assert isinstance(result.metadata["pt2_e0"], float)
+        assert result.metadata["pt2_wall_time"] >= 0
+
+    def test_corrected_energy_uses_pt2_e0(self, h2_hamiltonian, minimal_mol_info):
+        """corrected_energy must equal pt2_e0 + e_pt2, NOT best_energy + e_pt2."""
+        from unittest.mock import patch
+
+        from qvartools.methods.nqs.hi_nqs_sqd import run_hi_nqs_sqd
+
+        cfg = HINQSSQDConfig(
+            n_iterations=2,
+            n_samples_per_iter=10,
+            n_batches=1,
+            nqs_train_epochs=1,
+            embed_dim=16,
+            n_heads=2,
+            n_layers=1,
+            compute_pt2_correction=True,
+        )
+
+        def mock_solver(batch_configs, hamiltonian):
+            n = batch_configs.shape[0]
+            coeffs = np.zeros(n)
+            coeffs[0] = 1.0
+            return (-1.0, coeffs, (np.array([0.5]), np.array([0.5])))
+
+        with (
+            patch("qvartools.methods.nqs.hi_nqs_sqd._IBM_SQD_AVAILABLE", False),
+            patch(
+                "qvartools.methods.nqs.hi_nqs_sqd.gpu_solve_fermion",
+                side_effect=mock_solver,
+            ),
+        ):
+            result = run_hi_nqs_sqd(h2_hamiltonian, minimal_mol_info, config=cfg)
+
+        if "e_pt2" in result.metadata:
+            expected = result.metadata["pt2_e0"] + result.metadata["e_pt2"]
+            assert abs(result.metadata["corrected_energy"] - expected) < 1e-12, (
+                f"corrected_energy ({result.metadata['corrected_energy']}) != "
+                f"pt2_e0 ({result.metadata['pt2_e0']}) + e_pt2 ({result.metadata['e_pt2']})"
+            )
 
 
 # ---------------------------------------------------------------------------

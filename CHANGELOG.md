@@ -48,6 +48,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 14 new CAS molecules in registry (26 total): N₂-CAS(10,12/15/17/20/26), Cr₂ + variants up to 72Q, Benzene CAS(6,15)
 - IBM `solve_fermion` auto-enabled when `qiskit_addon_sqd` is installed (α×β Cartesian product, dramatically better accuracy)
 - `_train_nqs_teacher` raises `ValueError` when `energy_weight > 0` without `hamiltonian`
+- `compute_e_pt2`: EN-PT2 energy correction (`E_PT2 = Σ |⟨x|H|Ψ₀⟩|² / (E₀ - H_xx)`)
+- `HINQSSQDConfig.compute_pt2_correction`: opt-in E_PT2 correction after final iteration
+- `use_ibm_solver` changed to tri-state (`None`=auto, `True`=force, `False`=disable)
 - `_compute_cas_integrals` helper with auto-CASCI fallback for large active spaces
 - `MolecularHamiltonian.build_sparse_hamiltonian()` for O(nnz) sparse H construction
 - Sparse eigenvalue dispatch in `gpu_solve_fermion` for basis > 8K configs

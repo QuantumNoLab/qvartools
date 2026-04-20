@@ -35,6 +35,7 @@ from qvartools._utils.formatting.bitstring_format import (
 )
 from qvartools._utils.gpu.diagnostics import gpu_solve_fermion
 from qvartools.methods.nqs._pt2_helpers import (
+    compute_e_pt2,
     compute_pt2_scores,
     compute_temperature,
     evict_by_coefficient,
@@ -136,6 +137,12 @@ class HINQSSQDConfig:
         Weight for the REINFORCE energy loss term (default ``0.0``).
     entropy_weight : float
         Weight for the entropy regularisation term (default ``0.0``).
+    compute_pt2_correction : bool
+        Compute EN-PT2 energy correction after final iteration
+        (default ``False``).  When ``True``, ``metadata`` includes
+        ``e_pt2`` and ``corrected_energy = pt2_e0 + e_pt2``, where
+        ``pt2_e0`` is the full-basis diagonalisation energy used for the
+        PT2 correction (distinct from the main returned ``energy`` value).
     """
 
     n_iterations: int = 10
@@ -160,6 +167,7 @@ class HINQSSQDConfig:
     teacher_weight: float = 1.0
     energy_weight: float = 0.0
     entropy_weight: float = 0.0
+    compute_pt2_correction: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -622,6 +630,46 @@ def run_hi_nqs_sqd(
             best_energy,
         )
 
+    # --- Optional E_PT2 correction ---
+    metadata: dict[str, Any] = {
+        "energy_history": energy_history,
+        "n_iterations": len(energy_history),
+        "final_basis_size": int(cumulative_basis.shape[0]),
+    }
+
+    if cfg.compute_pt2_correction and cumulative_basis.shape[0] > 0:
+        t_pt2 = time.perf_counter()
+        # Full-basis diag to get consistent (E₀, Ψ₀) for E_PT2
+        n_full = cumulative_basis.shape[0]
+        if n_full <= 8_000:  # Align with CIPSI _SPARSE_DIAG_THRESHOLD
+            h_full = hamiltonian.matrix_elements_fast(cumulative_basis)
+            h_np = h_full.detach().cpu().numpy().astype(np.float64)
+            h_np = 0.5 * (h_np + h_np.T)
+            evals, evecs = np.linalg.eigh(h_np)
+            pt2_e0 = float(evals[0])
+            pt2_coeffs = evecs[:, 0]
+        else:
+            from scipy.sparse.linalg import eigsh as sp_eigsh
+
+            h_sp = hamiltonian.build_sparse_hamiltonian(cumulative_basis)
+            evals, evecs = sp_eigsh(h_sp.tocsr(), k=1, which="SA")
+            pt2_e0 = float(evals[0])
+            pt2_coeffs = evecs[:, 0]
+
+        e_pt2 = compute_e_pt2(cumulative_basis, pt2_coeffs, hamiltonian, pt2_e0)
+        pt2_wall = time.perf_counter() - t_pt2
+        metadata["e_pt2"] = e_pt2
+        metadata["pt2_e0"] = pt2_e0
+        metadata["corrected_energy"] = pt2_e0 + e_pt2
+        metadata["pt2_wall_time"] = pt2_wall
+        logger.info(
+            "  E_var=%.8f, E_PT2=%.6f Ha, corrected=%.8f Ha (%.1fs)",
+            pt2_e0,
+            e_pt2,
+            pt2_e0 + e_pt2,
+            pt2_wall,
+        )
+
     wall_time = time.perf_counter() - t_start
 
     return SolverResult(
@@ -630,9 +678,5 @@ def run_hi_nqs_sqd(
         wall_time=wall_time,
         method="HI+NQS+SQD",
         converged=converged,
-        metadata={
-            "energy_history": energy_history,
-            "n_iterations": len(energy_history),
-            "final_basis_size": int(cumulative_basis.shape[0]),
-        },
+        metadata=metadata,
     )

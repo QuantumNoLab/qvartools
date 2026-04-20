@@ -3,6 +3,7 @@
 Standalone pure functions for:
 
 - Epstein-Nesbet PT2 scoring
+- EN-PT2 energy correction (E_PT2)
 - Coefficient-based basis eviction (ASCI pattern)
 - Linear temperature annealing
 
@@ -10,6 +11,8 @@ Functions
 ---------
 compute_pt2_scores
     Score candidates by EN-PT2 importance.
+compute_e_pt2
+    Compute EN-PT2 energy correction.
 evict_by_coefficient
     Keep highest-|c_i|² configs.
 compute_temperature
@@ -112,6 +115,110 @@ def compute_pt2_scores(
         scores[idx] = coupling**2 / denom
 
     return scores
+
+
+def compute_e_pt2(
+    basis: torch.Tensor,
+    coeffs: np.ndarray,
+    hamiltonian: Any,
+    e0: float,
+) -> float:
+    r"""Compute Epstein-Nesbet second-order perturbation energy correction.
+
+    Sums over all determinants connected to the basis but NOT in the basis::
+
+        E_PT2 = Σ_{x ∉ V} |⟨x|H|Ψ₀⟩|² / (E₀ - H_xx)
+
+    where ``Ψ₀ = Σ_i c_i |x_i⟩`` and the sum runs over external
+    determinants reachable via single and double excitations.  For
+    real-valued Hamiltonians, ``|⟨x|H|Ψ₀⟩|² = ⟨x|H|Ψ₀⟩²``.
+
+    Parameters
+    ----------
+    basis : torch.Tensor
+        **Full** variational basis, shape ``(n_basis, n_qubits)``.
+        Must be the complete basis used for the diagonalisation that
+        produced ``coeffs`` and ``e0``.
+    coeffs : np.ndarray
+        Ground-state eigenvector from diagonalising H in ``basis``,
+        shape ``(n_basis,)``.
+    hamiltonian
+        Hamiltonian with ``get_connections``, ``diagonal_element``, and
+        ``diagonal_elements_batch``.
+    e0 : float
+        Variational ground-state energy from the same diagonalisation
+        as ``coeffs``.
+
+    Returns
+    -------
+    float
+        E_PT2 correction (typically negative).
+    """
+    if coeffs.shape[0] != basis.shape[0]:
+        raise ValueError(
+            f"coeffs length ({coeffs.shape[0]}) must match basis size "
+            f"({basis.shape[0]})"
+        )
+
+    basis_hash_list = config_integer_hash(basis)
+    basis_hash_set: set = set(basis_hash_list)
+
+    # Accumulate coupling ⟨x|H|Ψ₀⟩ for each external determinant x.
+    # Store config tensors temporarily for batched diagonal computation.
+    external_coupling: dict = {}  # hash -> coupling
+    external_config: dict = {}  # hash -> config tensor
+
+    for idx in range(basis.shape[0]):
+        c_i = float(coeffs[idx])
+        if abs(c_i) < 1e-14:
+            continue
+
+        connections, h_elements = hamiltonian.get_connections(basis[idx])
+        if connections is None or len(connections) == 0:
+            continue
+
+        conn_hashes = config_integer_hash(connections)
+        for j in range(len(connections)):
+            h_conn = conn_hashes[j]
+            if h_conn in basis_hash_set:
+                continue
+            contrib = float(h_elements[j]) * c_i
+            if h_conn in external_coupling:
+                external_coupling[h_conn] += contrib
+            else:
+                external_coupling[h_conn] = contrib
+                external_config[h_conn] = connections[j].detach().cpu().clone()
+
+    if not external_coupling:
+        return 0.0
+
+    # Compute diagonal elements in chunks to bound peak memory
+    ext_hashes = list(external_coupling.keys())
+    diag_batch_size = 4096
+
+    e_pt2 = 0.0
+    for start in range(0, len(ext_hashes), diag_batch_size):
+        chunk_hashes = ext_hashes[start : start + diag_batch_size]
+        ext_configs = torch.stack([external_config[h] for h in chunk_hashes])
+        h_diag = hamiltonian.diagonal_elements_batch(ext_configs)
+        h_diag_np = h_diag.detach().cpu().numpy().astype(np.float64)
+
+        for k, h_ext in enumerate(chunk_hashes):
+            h_xx = float(h_diag_np[k])
+            if not math.isfinite(h_xx):
+                continue
+            coupling = external_coupling[h_ext]
+            denom = e0 - h_xx
+            if abs(denom) < 1e-14:
+                sign = -1.0 if denom <= 0 else 1.0
+                denom = sign * 1e-14
+                logger.debug("Near-zero PT2 denominator clamped for hash %s", h_ext)
+            e_pt2 += coupling**2 / denom
+
+        del ext_configs, h_diag, h_diag_np
+
+    del external_config
+    return e_pt2
 
 
 def evict_by_coefficient(

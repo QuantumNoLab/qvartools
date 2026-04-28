@@ -1,0 +1,630 @@
+"""
+HI+NQS+SQD v3: NQS sampling + PT2 selection + SQD diagonalization.
+
+Flow:
+  1. NQS generates candidate configs (broad exploration)
+  2. PT2 score ranks candidates (precision filtering)
+  3. Top-k configs sent to solve_fermion (efficient diag)
+  4. Eigenvector feeds back to NQS (targeted learning)
+
+PT2 score: score(x) = |⟨x|H|Φ₀⟩|² / |E₀ - H_xx|
+  - Iter 0: no Φ₀ yet → use diagonal energy ranking
+  - Iter 1+: full PT2 using eigenvector from previous solve_fermion
+"""
+
+import time
+from dataclasses import dataclass
+from typing import Optional
+
+import numpy as np
+import torch
+
+from ..solvers.base import SolverResult
+from ..nqs.transformer import AutoregressiveTransformer
+
+from qiskit_addon_sqd.fermion import solve_fermion, bitstring_matrix_to_ci_strs
+from pyscf.fci.selected_ci import SCIvector
+from .incremental_sqd import IncrementalSQDBackend
+from .sparse_det_backend import SparseDetSQDBackend
+
+
+@dataclass
+class HINQSSQDConfig:
+    max_iterations: int = 30
+    convergence_threshold: float = 1e-6
+    convergence_window: int = 3
+
+    # NQS sampling
+    n_samples: int = 5000
+
+    # PT2 selection
+    top_k: int = 2000           # keep top-k configs per iteration
+    max_basis_size: int = 10000  # total basis cap (evict by PT2 score)
+
+    # NQS update
+    nqs_steps: int = 10
+    nqs_lr: float = 1e-3
+
+    # Loss weights
+    teacher_weight: float = 1.0
+    energy_weight: float = 0.1
+    entropy_weight: float = 0.05
+
+    # Temperature
+    initial_temperature: float = 1.0
+    final_temperature: float = 0.3
+
+    # SQD warm-start (use previous eigenvector as initial guess)
+    warm_start: bool = True
+
+    # Use incremental SQD backend (bypass solve_fermion, persist myci, skip RDM).
+    # ~5-30x faster on large basis (mimics HCI's stateful solver).
+    use_incremental_sqd: bool = True
+
+    # Use true determinant-level sparse solver (overrides use_incremental_sqd).
+    # Davidson vector length == N_det instead of n_a * n_b — recovers genuine
+    # HCI-style cost on NQS-sampled bases where n_a * n_b >> N_det.
+    use_sparse_det_solver: bool = False
+
+
+    # Monotonic basis growth: never evict, never rescore existing basis.
+    # When True:
+    #   - Iter 0 uses cold_start_k (or top_k // 4) configs to limit cold-start noise
+    #   - Iter 1+ only PT2-scores new candidates and APPENDS to basis
+    #   - max_basis_size is ignored (always treated as 0)
+    # This guarantees ci_strs(iter+1) ⊇ ci_strs(iter), giving Davidson a perfect
+    # warm-start ci0 with no zero-padding loss. Trade-off: basis grows unbounded.
+    monotonic_basis: bool = False
+    cold_start_k: Optional[int] = None  # None → top_k // 4 if monotonic else top_k
+
+
+def run_hi_nqs_sqd(hamiltonian, mol_info,
+                   config: Optional[HINQSSQDConfig] = None) -> SolverResult:
+    t0 = time.time()
+    cfg = config or HINQSSQDConfig()
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    n_orb = hamiltonian.n_orbitals
+    n_alpha = hamiltonian.n_alpha
+    n_beta = hamiltonian.n_beta
+    n_qubits = 2 * n_orb
+
+    integrals = hamiltonian.integrals
+    hcore = np.asarray(integrals.h1e, dtype=np.float64)
+    eri = np.asarray(integrals.h2e, dtype=np.float64)
+    nuclear_repulsion = float(integrals.nuclear_repulsion)
+
+    # Auto-scale transformer
+    if n_orb <= 5:
+        embed, heads, layers = 64, 4, 3
+    elif n_orb <= 7:
+        embed, heads, layers = 128, 4, 4
+    elif n_orb <= 10:
+        embed, heads, layers = 128, 8, 6
+    elif n_orb <= 15:
+        embed, heads, layers = 192, 8, 6
+    elif n_orb <= 20:
+        embed, heads, layers = 256, 8, 8
+    else:
+        embed, heads, layers = 256, 8, 10
+
+    nqs = AutoregressiveTransformer(
+        n_orbitals=n_orb, n_alpha=n_alpha, n_beta=n_beta,
+        embed_dim=embed, n_heads=heads, n_layers=layers,
+    ).to(device)
+
+    optimizer = torch.optim.Adam(nqs.parameters(), lr=cfg.nqs_lr)
+
+    n_params = sum(p.numel() for p in nqs.parameters())
+    print(f"    HI+NQS+SQD v3 (GPU={device}): arch={embed}/{heads}/{layers}, "
+          f"params={n_params:,}, samples={cfg.n_samples}, top_k={cfg.top_k}")
+
+    # State
+    energy_history = []
+    basis_size_history = []
+    prev_energy = float("inf")
+    best_energy = float("inf")
+    converged = False
+    converge_count = 0
+
+    # Basis management
+    cumulative_bs = None       # IBM format bool array
+    cumulative_hashes = set()
+    cumulative_scores = {}     # hash → PT2 score
+
+    # Previous eigenvector info (for PT2 scoring from iter 1+)
+    prev_sci_state = None
+    current_e0 = None
+    needs_rescore = False  # True after iter 0 → trigger full rescore at iter 1
+
+    # SQD backend selection (priority: sparse_det > incremental > legacy solve_fermion)
+    sqd_backend = None
+    if cfg.use_sparse_det_solver:
+        sqd_backend = SparseDetSQDBackend(
+            hcore=hcore, eri=eri,
+            n_alpha=n_alpha, n_beta=n_beta,
+        )
+    elif cfg.use_incremental_sqd:
+        sqd_backend = IncrementalSQDBackend(
+            hcore=hcore, eri=eri,
+            n_alpha=n_alpha, n_beta=n_beta, spin_sq=0,
+        )
+
+    for iteration in range(cfg.max_iterations):
+        iter_t0 = time.time()
+
+        progress = iteration / max(cfg.max_iterations - 1, 1)
+        temperature = (cfg.initial_temperature
+                       + progress * (cfg.final_temperature - cfg.initial_temperature))
+
+        # =====================================================
+        # Step 1: NQS sampling
+        # =====================================================
+        sample_t0 = time.time()
+        with torch.no_grad():
+            configs_gpu, _ = nqs.sample(cfg.n_samples, temperature=temperature)
+            configs_cpu = configs_gpu.long().cpu()
+
+            # Particle filter
+            alpha_counts = configs_cpu[:, :n_orb].sum(dim=1)
+            beta_counts = configs_cpu[:, n_orb:].sum(dim=1)
+            valid = (alpha_counts == n_alpha) & (beta_counts == n_beta)
+            new_configs = configs_cpu[valid]
+
+        n_sampled = len(new_configs)
+
+        # Dedup against existing basis
+        new_candidates = []
+        if len(new_configs) > 0:
+            new_unique = torch.unique(new_configs, dim=0)
+            new_bs = _configs_to_ibm_format(new_unique, n_orb, n_qubits)
+            for i in range(len(new_bs)):
+                h = new_bs[i].tobytes()
+                if h not in cumulative_hashes:
+                    new_candidates.append((new_bs[i], h, new_unique[i]))
+
+        sample_time = time.time() - sample_t0
+
+        # =====================================================
+        # Step 2: PT2 scoring + top-k selection
+        # =====================================================
+        score_t0 = time.time()
+        n_evicted = 0
+
+        if not new_candidates and not needs_rescore:
+            n_selected = 0
+        elif prev_sci_state is None or current_e0 is None:
+            # Iter 0: no Φ₀ yet → rank by diagonal energy, take cold_start_k
+            # (will be rescored with PT2 at Iter 1 unless monotonic_basis=True)
+            diag_configs = torch.stack([c[2] for c in new_candidates])
+            diag_e = hamiltonian.diagonal_elements_batch(diag_configs).cpu().numpy()
+
+            if cfg.monotonic_basis:
+                # Smaller cold-start set so noisy iter-0 picks don't permanently
+                # bloat the basis (we cannot evict them later).
+                _csk = cfg.cold_start_k if cfg.cold_start_k is not None else max(1, cfg.top_k // 4)
+            else:
+                _csk = cfg.cold_start_k if cfg.cold_start_k is not None else cfg.top_k
+            keep_n = min(_csk, len(diag_e))
+            top_idx = np.argsort(diag_e)[:keep_n]
+
+            new_rows = np.stack([new_candidates[idx][0] for idx in top_idx])
+            for idx in top_idx:
+                cumulative_hashes.add(new_candidates[idx][1])
+            if cumulative_bs is None:
+                cumulative_bs = new_rows
+            else:
+                cumulative_bs = np.vstack([cumulative_bs, new_rows])
+            n_selected = len(top_idx)
+            needs_rescore = not cfg.monotonic_basis
+        else:
+            # Iter 1+: PT2 scoring using eigenvector from previous solve_fermion
+            #
+            # At Iter 1 (needs_rescore=True): rescore ALL existing basis + new
+            # candidates together, keep top max_basis_size. This cleans out
+            # the unscreened Iter 0 configs.
+            #
+            # At Iter 2+: only score new candidates, add top_k to basis.
+
+            if needs_rescore and cumulative_bs is not None:
+                # === Iter 1 special: rescore everything ===
+                # Combine existing basis + new candidates into one pool
+                all_bs = []
+                all_hashes = []
+                all_configs = []
+
+                # Existing basis → convert back to config tensors
+                existing_configs = _ibm_format_to_configs(cumulative_bs, n_orb, n_qubits)
+                for i in range(len(cumulative_bs)):
+                    all_bs.append(cumulative_bs[i])
+                    all_hashes.append(cumulative_bs[i].tobytes())
+                    all_configs.append(existing_configs[i])
+
+                # New candidates
+                for bs_row, h, config_tensor in new_candidates:
+                    all_bs.append(bs_row)
+                    all_hashes.append(h)
+                    all_configs.append(config_tensor)
+
+                # PT2 score everything
+                all_as_candidates = [
+                    (all_bs[i], all_hashes[i], all_configs[i])
+                    for i in range(len(all_bs))
+                ]
+                diag_configs = torch.stack(all_configs)
+                diag_e = hamiltonian.diagonal_elements_batch(diag_configs).cpu().numpy()
+
+                coupling = _compute_coupling_to_ground_state(
+                    all_as_candidates, prev_sci_state, hamiltonian,
+                    n_orb, n_qubits,
+                )
+
+                scores = np.zeros(len(all_as_candidates))
+                for i in range(len(all_as_candidates)):
+                    denom = abs(current_e0 - diag_e[i])
+                    if denom < 1e-12:
+                        denom = 1e-12
+                    scores[i] = coupling[i] ** 2 / denom
+
+                # Keep top_k from the combined pool
+                keep_n = min(cfg.top_k, len(scores))
+                # Note: max_basis_size is NOT enforced here — Iter 2+ can grow freely
+                top_idx = np.argsort(scores)[::-1][:keep_n]
+
+                # Rebuild basis from scratch
+                cumulative_bs = np.stack([all_bs[i] for i in top_idx])
+                cumulative_hashes = {all_hashes[i] for i in top_idx}
+                cumulative_scores = {all_hashes[i]: float(scores[i]) for i in top_idx}
+
+                n_selected = len(top_idx) - len(existing_configs)  # net new
+                n_evicted = len(existing_configs) + len(new_candidates) - len(top_idx)
+                needs_rescore = False
+            else:
+                # === Iter 2+: only score new candidates ===
+                if new_candidates:
+                    diag_configs = torch.stack([c[2] for c in new_candidates])
+                    diag_e = hamiltonian.diagonal_elements_batch(diag_configs).cpu().numpy()
+
+                    coupling = _compute_coupling_to_ground_state(
+                        new_candidates, prev_sci_state, hamiltonian,
+                        n_orb, n_qubits,
+                    )
+
+                    scores = np.zeros(len(new_candidates))
+                    for i in range(len(new_candidates)):
+                        denom = abs(current_e0 - diag_e[i])
+                        if denom < 1e-12:
+                            denom = 1e-12
+                        scores[i] = coupling[i] ** 2 / denom
+
+                    top_idx = np.argsort(scores)[::-1][:cfg.top_k]
+
+                    new_rows = np.stack([new_candidates[idx][0] for idx in top_idx])
+                    for idx in top_idx:
+                        h = new_candidates[idx][1]
+                        cumulative_hashes.add(h)
+                        cumulative_scores[h] = float(scores[idx])
+                    cumulative_bs = np.vstack([cumulative_bs, new_rows])
+                    n_selected = len(top_idx)
+                else:
+                    n_selected = 0
+
+        # Seed with HF if empty
+        if cumulative_bs is None:
+            hf = hamiltonian.get_hf_state()
+            hf_bs = _configs_to_ibm_format(hf.unsqueeze(0), n_orb, n_qubits)
+            cumulative_bs = hf_bs
+            cumulative_hashes.add(hf_bs[0].tobytes())
+
+        # Evict lowest-scoring configs if over max_basis_size
+        # (skipped entirely in monotonic_basis mode)
+        if (not cfg.monotonic_basis
+                and cfg.max_basis_size > 0
+                and len(cumulative_bs) > cfg.max_basis_size):
+            # Score all configs, keep top max_basis_size
+            all_scores = np.array([
+                cumulative_scores.get(cumulative_bs[i].tobytes(), 0.0)
+                for i in range(len(cumulative_bs))
+            ])
+            keep_idx = np.argsort(all_scores)[::-1][:cfg.max_basis_size]
+            keep_idx.sort()
+            n_evicted = len(cumulative_bs) - len(keep_idx)
+            cumulative_bs = cumulative_bs[keep_idx]
+            cumulative_hashes = {row.tobytes() for row in cumulative_bs}
+
+        score_time = time.time() - score_t0
+
+        # =====================================================
+        # Step 3: SQD diagonalization (single batch, full basis)
+        # =====================================================
+        sqd_t0 = time.time()
+
+        try:
+            if sqd_backend is not None:
+                # Incremental backend: persistent myci, warm-start, skip RDM
+                e, sci_state = sqd_backend.solve(cumulative_bs)
+                e0 = e + nuclear_repulsion
+            else:
+                # Fallback: legacy solve_fermion path with optional ci0 warm-start
+                ci0 = None
+                if cfg.warm_start and prev_sci_state is not None:
+                    try:
+                        new_a, new_b = bitstring_matrix_to_ci_strs(
+                            cumulative_bs, open_shell=False
+                        )
+                        new_a_arr = np.asarray(new_a)
+                        new_b_arr = np.asarray(new_b)
+                        a_lookup = {int(s): i for i, s in enumerate(new_a_arr)}
+                        b_lookup = {int(s): i for i, s in enumerate(new_b_arr)}
+                        ci0_arr = np.zeros(
+                            (len(new_a_arr), len(new_b_arr)), dtype=np.float64
+                        )
+                        for ia, a_str in enumerate(prev_sci_state.ci_strs_a):
+                            ia_new = a_lookup.get(int(a_str), -1)
+                            if ia_new < 0:
+                                continue
+                            for ib, b_str in enumerate(prev_sci_state.ci_strs_b):
+                                ib_new = b_lookup.get(int(b_str), -1)
+                                if ib_new < 0:
+                                    continue
+                                ci0_arr[ia_new, ib_new] = (
+                                    prev_sci_state.amplitudes[ia, ib]
+                                )
+                        norm = float(np.linalg.norm(ci0_arr))
+                        if norm > 1e-10:
+                            ci0_arr /= norm
+                            ci0_sci = ci0_arr.view(SCIvector)
+                            ci0_sci._strs = (new_a_arr, new_b_arr)
+                            ci0 = ci0_sci
+                    except Exception:
+                        ci0 = None
+
+                kwargs = {"ci0": ci0} if ci0 is not None else {}
+                e, sci_state, occ, spin_sq = solve_fermion(
+                    cumulative_bs, hcore, eri, spin_sq=0, **kwargs
+                )
+                e0 = e + nuclear_repulsion
+
+            current_e0 = e0
+            prev_sci_state = sci_state
+        except Exception as ex:
+            print(f"    Iter {iteration:>3d}: SQD failed: {ex}")
+            continue
+
+        sqd_time = time.time() - sqd_t0
+
+        if e0 < best_energy:
+            best_energy = e0
+
+        energy_history.append(e0)
+        basis_size_history.append(len(cumulative_bs))
+
+        # =====================================================
+        # Step 4: Update NQS with eigenvector teacher
+        # =====================================================
+        update_t0 = time.time()
+        _update_nqs(
+            nqs, optimizer, cumulative_bs, e0,
+            sci_state, hamiltonian, cfg, device,
+            n_orb, n_qubits,
+        )
+        update_time = time.time() - update_t0
+
+        # =====================================================
+        # Step 5: Convergence
+        # =====================================================
+        delta_e = abs(e0 - prev_energy)
+        prev_energy = e0
+        iter_time = time.time() - iter_t0
+
+        if delta_e < cfg.convergence_threshold and iteration > 0:
+            converge_count += 1
+        else:
+            converge_count = 0
+
+        print(f"    Iter {iteration:>3d}: E={e0:.10f}, "
+              f"basis={len(cumulative_bs):>6d}(+{n_selected}, -{n_evicted}), "
+              f"ΔE={delta_e:.2e}, "
+              f"t={iter_time:.1f}s [samp={sample_time:.1f} pt2={score_time:.1f} "
+              f"sqd={sqd_time:.1f} upd={update_time:.1f}]")
+
+        if converge_count >= cfg.convergence_window:
+            converged = True
+            break
+
+    wall_time = time.time() - t0
+
+    return SolverResult(
+        energy=best_energy if best_energy < float("inf") else None,
+        diag_dim=len(cumulative_bs) if cumulative_bs is not None else 0,
+        wall_time=wall_time,
+        method="HI+NQS+SQD",
+        converged=converged,
+        metadata={
+            "iterations": iteration + 1 if "iteration" in dir() else 0,
+            "energy_history": energy_history,
+            "basis_size_history": basis_size_history,
+            "device": device,
+        },
+    )
+
+
+def _compute_coupling_to_ground_state(new_candidates, sci_state, hamiltonian,
+                                       n_orb, n_qubits):
+    """Compute |⟨x|H|Φ₀⟩| for each candidate config — GPU-batched.
+
+    Sends ALL candidates to get_connections_vectorized_batch in one call,
+    then uses scatter_add to accumulate coupling per candidate on GPU.
+
+    Returns array of |coupling| values (CPU numpy).
+    """
+    if not new_candidates:
+        return np.zeros(0)
+
+    device = hamiltonian.device
+
+    # --- build eigenvector coeff_map (CPU, once per call) ---
+    amps = np.asarray(sci_state.amplitudes)   # (na, nb)
+    ci_strs_a = np.asarray(sci_state.ci_strs_a)
+    ci_strs_b = np.asarray(sci_state.ci_strs_b)
+
+    # Vectorized: find non-zero entries then build dict from those only.
+    # Previously this was O(N_α × N_β) pure-Python loop, now it's a numpy scan
+    # plus a dict comprehension over only the non-zero entries (~N_basis).
+    nonzero = np.argwhere(np.abs(amps) > 1e-14)
+    coeff_map = {
+        (int(ci_strs_a[ia]), int(ci_strs_b[ib])): float(amps[ia, ib])
+        for ia, ib in nonzero
+    }
+
+    # --- batch ALL candidates into one GPU call ---
+    all_configs = torch.stack([c[2] for c in new_candidates]).to(device)  # (N, n_qubits)
+
+    try:
+        all_connected, all_elements, batch_indices = \
+            hamiltonian.get_connections_vectorized_batch(all_configs)
+    except MemoryError:
+        # Fallback: chunk into halves recursively until it fits
+        mid = len(new_candidates) // 2
+        c1 = _compute_coupling_to_ground_state(
+            new_candidates[:mid], sci_state, hamiltonian, n_orb, n_qubits)
+        c2 = _compute_coupling_to_ground_state(
+            new_candidates[mid:], sci_state, hamiltonian, n_orb, n_qubits)
+        return np.concatenate([c1, c2])
+
+    if len(all_connected) == 0:
+        return np.zeros(len(new_candidates))
+
+    # --- convert connected configs to (alpha_int, beta_int) on GPU ---
+    # Connected configs are in NQS format: position k = orbital k occupied.
+    # Integer encoding matches ci_strs_a/b: bit k = orbital k.
+    # a_int = sum(conn[k] * 2^k) — no flip needed.
+    powers = (2 ** torch.arange(n_orb, device=device, dtype=torch.long))  # [1,2,4,...]
+    alpha_bits = all_connected[:, :n_orb].long()    # (total_conn, n_orb)
+    beta_bits  = all_connected[:, n_orb:].long()    # (total_conn, n_orb)
+    a_ints = (alpha_bits * powers).sum(dim=1)       # (total_conn,)
+    b_ints = (beta_bits  * powers).sum(dim=1)       # (total_conn,)
+
+    # --- look up coeff for each connection (CPU dict, vectorised over array) ---
+    a_np = a_ints.cpu().numpy()
+    b_np = b_ints.cpu().numpy()
+    coeffs = np.fromiter(
+        (coeff_map.get((int(a), int(b)), 0.0) for a, b in zip(a_np, b_np)),
+        dtype=np.float64, count=len(a_np),
+    )
+    coeffs_t = torch.from_numpy(coeffs).to(device)
+
+    # --- scatter_add: coupling[i] += elem[j] * coeff[j]  for all j → i ---
+    weighted = all_elements.double() * coeffs_t            # (total_conn,)
+    coupling = torch.zeros(len(new_candidates), dtype=torch.double, device=device)
+    coupling.scatter_add_(0, batch_indices.long(), weighted)
+
+    return coupling.abs().cpu().numpy()
+
+
+def _update_nqs(nqs, optimizer, cumulative_bs, e0,
+                sci_state, hamiltonian, cfg, device,
+                n_orb, n_qubits):
+    """Update NQS using eigenvector teacher + REINFORCE."""
+    configs = _ibm_format_to_configs(cumulative_bs, n_orb, n_qubits)
+    n_total = len(configs)
+
+    # Eigenvector teacher weights via alpha/beta marginals
+    amps = np.abs(sci_state.amplitudes) ** 2
+    alpha_marginal = amps.sum(axis=1)
+    beta_marginal = amps.sum(axis=0)
+    alpha_marginal /= max(alpha_marginal.sum(), 1e-30)
+    beta_marginal /= max(beta_marginal.sum(), 1e-30)
+
+    alpha_map = {int(s): float(v) for s, v in zip(sci_state.ci_strs_a, alpha_marginal)}
+    beta_map = {int(s): float(v) for s, v in zip(sci_state.ci_strs_b, beta_marginal)}
+
+    # Vectorized bit packing (MSB-first within each spin channel)
+    powers_msb = (1 << np.arange(n_orb - 1, -1, -1)).astype(np.int64)
+    bs_int = np.asarray(cumulative_bs).astype(np.int64)
+    a_ints = (bs_int[:, :n_orb] * powers_msb).sum(axis=1)
+    b_ints = (bs_int[:, n_orb:] * powers_msb).sum(axis=1)
+
+    # Lookup per row (list-comp over dict is ~40k ops vs 40k × 20 bit-loop ops)
+    alpha_vals = np.fromiter(
+        (alpha_map.get(int(a), 0.0) for a in a_ints),
+        dtype=np.float64, count=n_total,
+    )
+    beta_vals = np.fromiter(
+        (beta_map.get(int(b), 0.0) for b in b_ints),
+        dtype=np.float64, count=n_total,
+    )
+    teacher_weights = alpha_vals * beta_vals
+
+    total_w = teacher_weights.sum()
+    if total_w > 0:
+        teacher_weights /= total_w
+    teacher_t = torch.from_numpy(teacher_weights).float().to(device)
+
+    with torch.no_grad():
+        diag_e = hamiltonian.diagonal_elements_batch(configs)
+        if isinstance(diag_e, torch.Tensor):
+            diag_e_t = diag_e.to(device=device, dtype=torch.float32)
+        else:
+            diag_e_t = torch.tensor(np.asarray(diag_e, dtype=np.float64),
+                                    dtype=torch.float32, device=device)
+        advantage = diag_e_t - e0
+
+    max_batch = min(5000, n_total)
+
+    for step in range(cfg.nqs_steps):
+        optimizer.zero_grad()
+
+        if n_total > max_batch:
+            idx = torch.randperm(n_total)[:max_batch]
+            batch_configs = configs[idx].float().to(device)
+            batch_teacher = teacher_t[idx]
+            batch_teacher = batch_teacher / max(batch_teacher.sum(), 1e-30)
+            batch_advantage = advantage[idx]
+        else:
+            batch_configs = configs.float().to(device)
+            batch_teacher = teacher_t
+            batch_advantage = advantage
+
+        log_probs = nqs.log_prob(batch_configs)
+
+        loss_teacher = -(batch_teacher * log_probs).sum()
+        loss_energy = (batch_teacher * batch_advantage * log_probs).sum()
+        loss_entropy = log_probs.mean()
+
+        loss = (cfg.teacher_weight * loss_teacher
+                + cfg.energy_weight * loss_energy
+                + cfg.entropy_weight * loss_entropy)
+
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(nqs.parameters(), max_norm=1.0)
+        optimizer.step()
+
+
+def _ibm_row_to_int(row, n_orb, is_alpha, n_qubits):
+    val = 0
+    offset = 0 if is_alpha else n_orb
+    for j in range(n_orb):
+        if row[offset + n_orb - 1 - j]:
+            val |= (1 << j)
+    return val
+
+
+def _configs_to_ibm_format(configs, n_orb, n_qubits):
+    if torch.is_tensor(configs):
+        configs_np = configs.cpu().numpy()
+    else:
+        configs_np = np.asarray(configs)
+    bs = np.zeros((len(configs_np), n_qubits), dtype=bool)
+    bs[:, :n_orb] = configs_np[:, n_orb - 1::-1].astype(bool)
+    bs[:, n_orb:] = configs_np[:, 2 * n_orb - 1:n_orb - 1:-1].astype(bool)
+    return bs
+
+
+def _ibm_format_to_configs(bs_matrix, n_orb, n_qubits):
+    bs_np = np.asarray(bs_matrix)
+    configs_np = np.zeros((len(bs_np), n_qubits), dtype=np.int64)
+    configs_np[:, :n_orb] = bs_np[:, n_orb - 1::-1].astype(np.int64)
+    configs_np[:, n_orb:] = bs_np[:, n_qubits - 1:n_orb - 1:-1].astype(np.int64)
+    return torch.from_numpy(configs_np).long()

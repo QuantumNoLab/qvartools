@@ -55,7 +55,12 @@ class HINQSSQDConfig:
     final_temperature: float = 0.3
 
     # SQD warm-start (use previous eigenvector as initial guess)
-    warm_start: bool = True
+    # CHANGED 2026-05-01: default False after discovering Davidson lock-in bug.
+    # warm_start can cause Davidson to converge to wrong eigenvalue when iter k+1
+    # basis adds dets weakly H-coupled to iter k eigenvector. Verified on
+    # stretched N2 R=1.8: warm gave +110.6 mHa, cold gave +0.005 mHa on SAME basis.
+    # Set to True only for single-reference systems where you trust convergence.
+    warm_start: bool = False
 
     # Use incremental SQD backend (bypass solve_fermion, persist myci, skip RDM).
     # ~5-30x faster on large basis (mimics HCI's stateful solver).
@@ -523,10 +528,20 @@ def _compute_coupling_to_ground_state(new_candidates, sci_state, hamiltonian,
     return coupling.abs().cpu().numpy()
 
 
+_LOSS_HISTORY = []  # filled by _update_nqs; consumed by run_*
+_CURRENT_ITER = [0]  # set by v3 main loop before each _update_nqs call
+_TRUST_SCHEDULE = [None]  # callable(iteration) -> trust ∈ [0,1]; None = no anneal
+_USE_NQS_SCORE = [False]  # if True, replace PT2 score with NQS log_prob for selection
+
 def _update_nqs(nqs, optimizer, cumulative_bs, e0,
                 sci_state, hamiltonian, cfg, device,
                 n_orb, n_qubits):
-    """Update NQS using eigenvector teacher + REINFORCE."""
+    """Update NQS using eigenvector teacher + REINFORCE.
+
+    If `_TRUST_SCHEDULE[0]` is callable, scales teacher/energy weights by
+    trust(iter) and entropy weight by (2 - trust). Trust=1 reproduces
+    static-weight behaviour; trust=0 disables teacher entirely.
+    """
     configs = _ibm_format_to_configs(cumulative_bs, n_orb, n_qubits)
     n_total = len(configs)
 
@@ -593,9 +608,28 @@ def _update_nqs(nqs, optimizer, cumulative_bs, e0,
         loss_energy = (batch_teacher * batch_advantage * log_probs).sum()
         loss_entropy = log_probs.mean()
 
-        loss = (cfg.teacher_weight * loss_teacher
-                + cfg.energy_weight * loss_energy
-                + cfg.entropy_weight * loss_entropy)
+        # Optional trust-annealing
+        sched = _TRUST_SCHEDULE[0]
+        if sched is not None:
+            trust = float(sched(_CURRENT_ITER[0]))
+            tw = cfg.teacher_weight * trust
+            ew = cfg.energy_weight * trust
+            ent_w = cfg.entropy_weight * (2.0 - trust)
+        else:
+            tw = cfg.teacher_weight
+            ew = cfg.energy_weight
+            ent_w = cfg.entropy_weight
+
+        loss = tw * loss_teacher + ew * loss_energy + ent_w * loss_entropy
+
+        # Record per-step loss components (consumed by run_hi_nqs_sqd_v3)
+        _LOSS_HISTORY.append({
+            "step": int(step),
+            "L_teacher": float(loss_teacher.detach().item()),
+            "L_energy":  float(loss_energy.detach().item()),
+            "L_entropy": float(loss_entropy.detach().item()),
+            "L_total":   float(loss.detach().item()),
+        })
 
         loss.backward()
         torch.nn.utils.clip_grad_norm_(nqs.parameters(), max_norm=1.0)

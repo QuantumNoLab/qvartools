@@ -155,6 +155,10 @@ def run_hi_nqs_sqd_v3(hamiltonian, mol_info,
     t0 = time.time()
     cfg = config or HINQSSQDv3Config()
 
+    # Reset loss history for this run (cleared again at end before drain)
+    from .hi_nqs_sqd import _LOSS_HISTORY
+    _LOSS_HISTORY.clear()
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     n_orb = hamiltonian.n_orbitals
@@ -332,16 +336,29 @@ def run_hi_nqs_sqd_v3(hamiltonian, mol_info,
                 diag_configs = torch.stack(all_configs)
                 diag_e = hamiltonian.diagonal_elements_batch(diag_configs).cpu().numpy()
 
-                coupling = _compute_coupling_to_ground_state(
-                    all_as_candidates, prev_sci_state, hamiltonian, n_orb, n_qubits
-                )
-
-                scores = np.zeros(len(all_as_candidates))
-                for i in range(len(all_as_candidates)):
-                    denom = abs(current_e0 - diag_e[i])
-                    if denom < 1e-12:
-                        denom = 1e-12
-                    scores[i] = coupling[i] ** 2 / denom
+                from .hi_nqs_sqd import _USE_NQS_SCORE as _UNS
+                if _UNS[0]:
+                    # Score by NQS log-amplitude (chunked to avoid OOM)
+                    with torch.no_grad():
+                        chunks = []
+                        bs = 4096
+                        for s in range(0, diag_configs.shape[0], bs):
+                            cfg_chunk = diag_configs[s:s+bs].float().to(device)
+                            chunks.append(nqs.log_prob(cfg_chunk).detach().cpu())
+                            if torch.cuda.is_available():
+                                torch.cuda.empty_cache()
+                        log_p = torch.cat(chunks, dim=0)
+                    scores = log_p.numpy()
+                else:
+                    coupling = _compute_coupling_to_ground_state(
+                        all_as_candidates, prev_sci_state, hamiltonian, n_orb, n_qubits
+                    )
+                    scores = np.zeros(len(all_as_candidates))
+                    for i in range(len(all_as_candidates)):
+                        denom = abs(current_e0 - diag_e[i])
+                        if denom < 1e-12:
+                            denom = 1e-12
+                        scores[i] = coupling[i] ** 2 / denom
 
                 keep_n = min(cfg.top_k, len(scores))
                 top_idx = np.argsort(scores)[::-1][:keep_n]
@@ -358,16 +375,28 @@ def run_hi_nqs_sqd_v3(hamiltonian, mol_info,
                     diag_configs = torch.stack([c[2] for c in new_candidates])
                     diag_e = hamiltonian.diagonal_elements_batch(diag_configs).cpu().numpy()
 
-                    coupling = _compute_coupling_to_ground_state(
-                        new_candidates, prev_sci_state, hamiltonian, n_orb, n_qubits
-                    )
-
-                    scores = np.zeros(len(new_candidates))
-                    for i in range(len(new_candidates)):
-                        denom = abs(current_e0 - diag_e[i])
-                        if denom < 1e-12:
-                            denom = 1e-12
-                        scores[i] = coupling[i] ** 2 / denom
+                    from .hi_nqs_sqd import _USE_NQS_SCORE as _UNS2
+                    if _UNS2[0]:
+                        with torch.no_grad():
+                            chunks = []
+                            bs = 4096
+                            for s in range(0, diag_configs.shape[0], bs):
+                                cfg_chunk = diag_configs[s:s+bs].float().to(device)
+                                chunks.append(nqs.log_prob(cfg_chunk).detach().cpu())
+                                if torch.cuda.is_available():
+                                    torch.cuda.empty_cache()
+                            log_p = torch.cat(chunks, dim=0)
+                        scores = log_p.numpy()
+                    else:
+                        coupling = _compute_coupling_to_ground_state(
+                            new_candidates, prev_sci_state, hamiltonian, n_orb, n_qubits
+                        )
+                        scores = np.zeros(len(new_candidates))
+                        for i in range(len(new_candidates)):
+                            denom = abs(current_e0 - diag_e[i])
+                            if denom < 1e-12:
+                                denom = 1e-12
+                            scores[i] = coupling[i] ** 2 / denom
 
                     top_idx = np.argsort(scores)[::-1][:cfg.top_k]
                     new_rows = np.stack([new_candidates[idx][0] for idx in top_idx])
@@ -463,6 +492,8 @@ def run_hi_nqs_sqd_v3(hamiltonian, mol_info,
 
         # Step 4: update NQS
         update_t0 = time.time()
+        from .hi_nqs_sqd import _CURRENT_ITER as _CITER
+        _CITER[0] = iteration
         _update_nqs(
             nqs, optimizer, cumulative_bs, e0,
             sci_state, hamiltonian, cfg, device, n_orb, n_qubits,
@@ -519,6 +550,11 @@ def run_hi_nqs_sqd_v3(hamiltonian, mol_info,
 
     wall_time = time.time() - t0
 
+    # Drain loss history captured by _update_nqs
+    from .hi_nqs_sqd import _LOSS_HISTORY
+    loss_history = list(_LOSS_HISTORY)
+    _LOSS_HISTORY.clear()
+
     return SolverResult(
         energy=e_total if e_total < float("inf") else None,
         diag_dim=len(cumulative_bs) if cumulative_bs is not None else 0,
@@ -528,7 +564,9 @@ def run_hi_nqs_sqd_v3(hamiltonian, mol_info,
         metadata={
             "iterations": iteration + 1 if "iteration" in dir() else 0,
             "energy_history": energy_history,
+            "loss_history": loss_history,
             "basis_size_history": basis_size_history,
+            "final_basis": cumulative_bs.copy() if cumulative_bs is not None else None,
             "device": device,
             "v3_classical_seed": cfg.classical_seed,
             "v3_classical_expansion": cfg.classical_expansion,
